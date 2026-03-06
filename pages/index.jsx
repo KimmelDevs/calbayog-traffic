@@ -38,20 +38,15 @@ export default function Home() {
     );
   }, []);
 
-  // Called when user clicks a road on the map
-  const handleAddRoad = (road) => {
-    // Prevent duplicates
-    setSegments((prev) => {
-      if (prev.find((s) => s.id === road.id)) {
-        // Road already exists — just select it
-        setSelectedSegment(prev.find((s) => s.id === road.id));
-        return prev;
-      }
-      const day = new Date().getDay();
-      const newSeg = { ...road, series: generateFullDaySeries(road.baseFlow, day) };
-      setSelectedSegment(newSeg);
-      return [...prev, newSeg];
-    });
+  // Replace ALL segments with newly fetched OSM roads
+  const handleReplaceRoads = (roads) => {
+    const day = new Date().getDay();
+    const newSegments = roads.map((road) => ({
+      ...road,
+      series: generateFullDaySeries(road.baseFlow, day),
+    }));
+    setSegments(newSegments);
+    setSelectedSegment(null); // clear old selection
   };
 
   useEffect(() => {
@@ -99,7 +94,7 @@ export default function Home() {
                     segments={segments}
                     selectedHour={selectedHour}
                     onSelectSegment={setSelectedSegment}
-                    onAddRoad={handleAddRoad}
+                    onReplaceRoads={handleReplaceRoads}
                   />
                   <div style={{ position: "absolute", top: 12, left: 12, background: "#0f172acc", border: "1px solid #1e3a5f", borderRadius: 8, padding: "6px 12px", fontSize: 12, color: "#38bdf8", fontWeight: 700, backdropFilter: "blur(4px)", zIndex: 500, letterSpacing: "0.05em", pointerEvents: "none" }}>
                     {String(selectedHour).padStart(2, "0")}:00{" "}

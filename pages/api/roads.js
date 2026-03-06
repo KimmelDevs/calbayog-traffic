@@ -1,6 +1,4 @@
 // pages/api/roads.js
-// Proxy for Overpass API to avoid CORS issues in the browser
-
 export default async function handler(req, res) {
   const { lat, lng } = req.query;
 
@@ -8,7 +6,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "lat and lng are required" });
   }
 
-  const delta = 0.001;
+  const delta = 0.003; // ~330m radius — gets all nearby roads
   const bbox = `${+lat - delta},${+lng - delta},${+lat + delta},${+lng + delta}`;
   const query = `[out:json][timeout:15];way["highway"~"^(primary|secondary|tertiary|residential|unclassified|trunk|service)$"](${bbox});out geom;`;
 

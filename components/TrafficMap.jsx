@@ -2,17 +2,15 @@
 import { useEffect, useRef } from "react";
 import { getTrafficLevel, MAP_CENTER, MAP_ZOOM } from "../lib/trafficData";
 
-export default function TrafficMap({ segments, selectedHour, onSelectSegment, onAddRoad }) {
+export default function TrafficMap({ segments, selectedHour, onSelectSegment, onReplaceRoads }) {
   const mapRef = useRef(null);
   const leafletMapRef = useRef(null);
-  // Keep callbacks in refs so the map click closure always has the latest version
-  const onAddRoadRef = useRef(onAddRoad);
+  const onReplaceRoadsRef = useRef(onReplaceRoads);
   const onSelectSegmentRef = useRef(onSelectSegment);
 
-  useEffect(() => { onAddRoadRef.current = onAddRoad; }, [onAddRoad]);
+  useEffect(() => { onReplaceRoadsRef.current = onReplaceRoads; }, [onReplaceRoads]);
   useEffect(() => { onSelectSegmentRef.current = onSelectSegment; }, [onSelectSegment]);
 
-  // Init map once
   useEffect(() => {
     let map = null;
 
@@ -36,44 +34,31 @@ export default function TrafficMap({ segments, selectedHour, onSelectSegment, on
         maxZoom: 19,
       }).addTo(map);
 
-      const cityIcon = L.divIcon({
-        html: `<div style="background:#0f172a;border:1px solid #3b82f6;color:#38bdf8;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;letter-spacing:0.1em;padding:4px 8px;border-radius:4px;white-space:nowrap;box-shadow:0 0 12px #3b82f640;">📍 CALBAYOG CITY PROPER</div>`,
-        className: "",
-        iconAnchor: [90, 10],
-      });
-      L.marker([12.066, 124.607], { icon: cityIcon }).addTo(map);
-
-      // Loading toast
+      // Loading overlay
       const loadingDiv = document.createElement("div");
       loadingDiv.style.cssText = `
         display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-        background:#0f172acc;border:1px solid #3b82f6;color:#38bdf8;
+        background:#0f172aee;border:1px solid #3b82f6;color:#38bdf8;
         font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.1em;
-        padding:10px 20px;border-radius:8px;z-index:2000;pointer-events:none;
+        padding:12px 24px;border-radius:8px;z-index:2000;pointer-events:none;
       `;
-      loadingDiv.textContent = "⏳ FETCHING ROAD DATA...";
+      loadingDiv.textContent = "⏳ LOADING NEARBY ROADS...";
       mapRef.current.appendChild(loadingDiv);
-      map._loadingDiv = loadingDiv;
 
-      // Map click → Overpass query
-      // Use a flag to prevent firing when clicking a polyline
-      map._clickedPolyline = false;
+      // Click → fetch all nearby roads and replace current set
       map.on("click", async (e) => {
-        if (map._clickedPolyline) {
-          map._clickedPolyline = false;
-          return;
-        }
         const { lat, lng } = e.latlng;
         loadingDiv.style.display = "block";
+
         try {
-          const road = await fetchNearestRoad(lat, lng);
-          if (road) {
-            onAddRoadRef.current(road);
+          const roads = await fetchNearbyRoads(lat, lng);
+          if (roads.length > 0) {
+            onReplaceRoadsRef.current(roads);
           } else {
-            showToast(mapRef.current, "No road found here — try clicking closer to a road");
+            showToast(mapRef.current, "No roads found here — try clicking on a street");
           }
         } catch (err) {
-          showToast(mapRef.current, "Could not fetch road data. Check your connection.");
+          showToast(mapRef.current, "Could not fetch roads. Check your connection.");
           console.error(err);
         } finally {
           loadingDiv.style.display = "none";
@@ -90,7 +75,6 @@ export default function TrafficMap({ segments, selectedHour, onSelectSegment, on
     };
   }, []);
 
-  // Redraw polylines when hour or segments change
   useEffect(() => {
     const map = leafletMapRef.current;
     if (!map || !map._L) return;
@@ -106,55 +90,49 @@ export default function TrafficMap({ segments, selectedHour, onSelectSegment, on
         padding: "5px 14px", fontSize: 10, color: "#475569", letterSpacing: "0.1em",
         pointerEvents: "none", zIndex: 500, whiteSpace: "nowrap",
       }}>
-        🖱 CLICK ANY SPOT ON THE MAP TO ADD NEAREST ROAD
+        🖱 CLICK ANYWHERE TO LOAD NEARBY ROADS
       </div>
     </div>
   );
 }
 
-async function fetchNearestRoad(lat, lng) {
-  // Call our own Next.js API proxy to avoid CORS/network issues
+async function fetchNearbyRoads(lat, lng) {
   const res = await fetch(`/api/roads?lat=${lat}&lng=${lng}`);
-
   if (!res.ok) throw new Error(`API error: ${res.status}`);
 
   const data = await res.json();
   if (data.error) throw new Error(data.error);
-  if (!data.elements || data.elements.length === 0) return null;
+  if (!data.elements || data.elements.length === 0) return [];
 
-  // Find the way whose geometry is closest to the click point
-  let best = null;
-  let bestDist = Infinity;
+  const roads = [];
+  const seen = new Set();
 
   for (const way of data.elements) {
     if (!way.geometry || way.geometry.length < 2) continue;
-    // Check distance to each node
-    for (const node of way.geometry) {
-      const d = Math.hypot(node.lat - lat, node.lon - lng);
-      if (d < bestDist) {
-        bestDist = d;
-        best = way;
-      }
-    }
+
+    const name = way.tags?.name || way.tags?.["name:en"] || `Road #${way.id}`;
+
+    // Deduplicate by name so we don't get 10 segments of "Maharlika Highway"
+    if (seen.has(name)) continue;
+    seen.add(name);
+
+    const nodes = way.geometry;
+    const from = [nodes[0].lat, nodes[0].lon];
+    const to = [nodes[nodes.length - 1].lat, nodes[nodes.length - 1].lon];
+
+    roads.push({
+      id: way.id,
+      name,
+      shortName: name.length > 16 ? name.slice(0, 16) + "…" : name,
+      from,
+      to,
+      baseFlow: 150 + Math.floor(Math.random() * 300),
+      description: `${way.tags?.highway || "road"} · OSM ${way.id}`,
+      fromOSM: true,
+    });
   }
 
-  if (!best) return null;
-
-  const name = best.tags?.name || best.tags?.["name:en"] || `Road #${best.id}`;
-  const nodes = best.geometry;
-  const from = [nodes[0].lat, nodes[0].lon];
-  const to = [nodes[nodes.length - 1].lat, nodes[nodes.length - 1].lon];
-
-  return {
-    id: best.id,
-    name,
-    shortName: name.length > 16 ? name.slice(0, 16) + "…" : name,
-    from,
-    to,
-    baseFlow: 150 + Math.floor(Math.random() * 300),
-    description: `${best.tags?.highway || "road"} — OSM id ${best.id}`,
-    fromOSM: true,
-  };
+  return roads;
 }
 
 function drawPolylines(map, L, segments, selectedHour, onSelectSegmentRef) {
@@ -186,7 +164,6 @@ function drawPolylines(map, L, segments, selectedHour, onSelectSegmentRef) {
       { sticky: true, offset: [10, 0] }
     );
 
-    // Mark as polyline click so map click handler skips Overpass fetch
     pl.on("click", (e) => {
       L.DomEvent.stopPropagation(e);
       onSelectSegmentRef.current(seg);
