@@ -113,21 +113,13 @@ export default function TrafficMap({ segments, selectedHour, onSelectSegment, on
 }
 
 async function fetchNearestRoad(lat, lng) {
-  // Wider bbox (0.001 ≈ 110m) for easier clicking
-  const delta = 0.001;
-  const bbox = `${lat - delta},${lng - delta},${lat + delta},${lng + delta}`;
+  // Call our own Next.js API proxy to avoid CORS/network issues
+  const res = await fetch(`/api/roads?lat=${lat}&lng=${lng}`);
 
-  const query = `[out:json][timeout:15];way["highway"~"^(primary|secondary|tertiary|residential|unclassified|trunk|service|path|footway)$"](${bbox});out geom;`;
-
-  const res = await fetch("https://overpass-api.de/api/interpreter", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: `data=${encodeURIComponent(query)}`,
-  });
-
-  if (!res.ok) throw new Error(`Overpass error: ${res.status}`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
 
   const data = await res.json();
+  if (data.error) throw new Error(data.error);
   if (!data.elements || data.elements.length === 0) return null;
 
   // Find the way whose geometry is closest to the click point
