@@ -5,7 +5,14 @@ import { getTrafficLevel, MAP_CENTER, MAP_ZOOM } from "../lib/trafficData";
 export default function TrafficMap({ segments, selectedHour, onSelectSegment, onAddRoad }) {
   const mapRef = useRef(null);
   const leafletMapRef = useRef(null);
+  // Keep callbacks in refs so the map click closure always has the latest version
+  const onAddRoadRef = useRef(onAddRoad);
+  const onSelectSegmentRef = useRef(onSelectSegment);
 
+  useEffect(() => { onAddRoadRef.current = onAddRoad; }, [onAddRoad]);
+  useEffect(() => { onSelectSegmentRef.current = onSelectSegment; }, [onSelectSegment]);
+
+  // Init map once
   useEffect(() => {
     let map = null;
 
@@ -36,33 +43,38 @@ export default function TrafficMap({ segments, selectedHour, onSelectSegment, on
       });
       L.marker([12.066, 124.607], { icon: cityIcon }).addTo(map);
 
-      // Loading indicator div (shown while querying Overpass)
+      // Loading toast
       const loadingDiv = document.createElement("div");
-      loadingDiv.id = "map-loading";
       loadingDiv.style.cssText = `
         display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
         background:#0f172acc;border:1px solid #3b82f6;color:#38bdf8;
         font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.1em;
-        padding:10px 20px;border-radius:8px;z-index:1000;pointer-events:none;
-        backdrop-filter:blur(4px);
+        padding:10px 20px;border-radius:8px;z-index:2000;pointer-events:none;
       `;
       loadingDiv.textContent = "⏳ FETCHING ROAD DATA...";
       mapRef.current.appendChild(loadingDiv);
+      map._loadingDiv = loadingDiv;
 
-      // Click on map → query Overpass for nearest road
+      // Map click → Overpass query
+      // Use a flag to prevent firing when clicking a polyline
+      map._clickedPolyline = false;
       map.on("click", async (e) => {
+        if (map._clickedPolyline) {
+          map._clickedPolyline = false;
+          return;
+        }
         const { lat, lng } = e.latlng;
         loadingDiv.style.display = "block";
-
         try {
           const road = await fetchNearestRoad(lat, lng);
           if (road) {
-            onAddRoad(road);
+            onAddRoadRef.current(road);
           } else {
-            showToast(mapRef.current, "No road found at this location");
+            showToast(mapRef.current, "No road found here — try clicking closer to a road");
           }
         } catch (err) {
-          showToast(mapRef.current, "Could not fetch road data");
+          showToast(mapRef.current, "Could not fetch road data. Check your connection.");
+          console.error(err);
         } finally {
           loadingDiv.style.display = "none";
         }
@@ -70,7 +82,7 @@ export default function TrafficMap({ segments, selectedHour, onSelectSegment, on
 
       map._L = L;
       leafletMapRef.current = map;
-      drawPolylines(map, L, segments, selectedHour, onSelectSegment);
+      drawPolylines(map, L, segments, selectedHour, onSelectSegmentRef);
     });
 
     return () => {
@@ -78,71 +90,82 @@ export default function TrafficMap({ segments, selectedHour, onSelectSegment, on
     };
   }, []);
 
+  // Redraw polylines when hour or segments change
   useEffect(() => {
     const map = leafletMapRef.current;
     if (!map || !map._L) return;
-    drawPolylines(map, map._L, segments, selectedHour, onSelectSegment);
+    drawPolylines(map, map._L, segments, selectedHour, onSelectSegmentRef);
   }, [segments, selectedHour]);
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <div ref={mapRef} style={{ width: "100%", height: "100%" }} />
-      {/* Hint overlay */}
       <div style={{
         position: "absolute", bottom: 40, left: "50%", transform: "translateX(-50%)",
         background: "#0f172acc", border: "1px solid #1e3a5f", borderRadius: 6,
         padding: "5px 14px", fontSize: 10, color: "#475569", letterSpacing: "0.1em",
-        pointerEvents: "none", zIndex: 500, whiteSpace: "nowrap", backdropFilter: "blur(4px)",
+        pointerEvents: "none", zIndex: 500, whiteSpace: "nowrap",
       }}>
-        🖱 CLICK ANY ROAD TO ADD IT AS A MONITORED SEGMENT
+        🖱 CLICK ANY SPOT ON THE MAP TO ADD NEAREST ROAD
       </div>
     </div>
   );
 }
 
-// Query Overpass API for the nearest highway within ~50m of click
 async function fetchNearestRoad(lat, lng) {
-  const delta = 0.0005; // ~55m bounding box
+  // Wider bbox (0.001 ≈ 110m) for easier clicking
+  const delta = 0.001;
   const bbox = `${lat - delta},${lng - delta},${lat + delta},${lng + delta}`;
 
-  const query = `
-    [out:json][timeout:10];
-    way["highway"~"^(primary|secondary|tertiary|residential|unclassified|trunk|service)$"](${bbox});
-    out geom;
-  `;
+  const query = `[out:json][timeout:15];way["highway"~"^(primary|secondary|tertiary|residential|unclassified|trunk|service|path|footway)$"](${bbox});out geom;`;
 
   const res = await fetch("https://overpass-api.de/api/interpreter", {
     method: "POST",
-    body: query,
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `data=${encodeURIComponent(query)}`,
   });
+
+  if (!res.ok) throw new Error(`Overpass error: ${res.status}`);
 
   const data = await res.json();
   if (!data.elements || data.elements.length === 0) return null;
 
-  // Pick the first result (closest)
-  const way = data.elements[0];
-  const name = way.tags?.name || way.tags?.["name:en"] || `Road #${way.id}`;
-  const nodes = way.geometry;
+  // Find the way whose geometry is closest to the click point
+  let best = null;
+  let bestDist = Infinity;
 
-  if (!nodes || nodes.length < 2) return null;
+  for (const way of data.elements) {
+    if (!way.geometry || way.geometry.length < 2) continue;
+    // Check distance to each node
+    for (const node of way.geometry) {
+      const d = Math.hypot(node.lat - lat, node.lon - lng);
+      if (d < bestDist) {
+        bestDist = d;
+        best = way;
+      }
+    }
+  }
 
-  // Use first and last node as the segment endpoints
+  if (!best) return null;
+
+  const name = best.tags?.name || best.tags?.["name:en"] || `Road #${best.id}`;
+  const nodes = best.geometry;
   const from = [nodes[0].lat, nodes[0].lon];
   const to = [nodes[nodes.length - 1].lat, nodes[nodes.length - 1].lon];
 
   return {
-    id: way.id,
+    id: best.id,
     name,
-    shortName: name.length > 14 ? name.slice(0, 14) + "…" : name,
+    shortName: name.length > 16 ? name.slice(0, 16) + "…" : name,
     from,
     to,
-    baseFlow: 200 + Math.floor(Math.random() * 250),
-    description: `${way.tags?.highway || "road"} — OSM id ${way.id}`,
+    baseFlow: 150 + Math.floor(Math.random() * 300),
+    description: `${best.tags?.highway || "road"} — OSM id ${best.id}`,
     fromOSM: true,
   };
 }
 
-function drawPolylines(map, L, segments, selectedHour, onSelectSegment) {
+function drawPolylines(map, L, segments, selectedHour, onSelectSegmentRef) {
   map.eachLayer((layer) => {
     if (layer._isTrafficLine) layer.remove();
   });
@@ -170,7 +193,12 @@ function drawPolylines(map, L, segments, selectedHour, onSelectSegment) {
       </div>`,
       { sticky: true, offset: [10, 0] }
     );
-    pl.on("click", () => onSelectSegment(seg));
+
+    // Mark as polyline click so map click handler skips Overpass fetch
+    pl.on("click", (e) => {
+      L.DomEvent.stopPropagation(e);
+      onSelectSegmentRef.current(seg);
+    });
   });
 }
 
@@ -180,10 +208,9 @@ function showToast(container, msg) {
     position:absolute;top:60px;left:50%;transform:translateX(-50%);
     background:#1e293b;border:1px solid #ef4444;color:#ef4444;
     font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.08em;
-    padding:8px 16px;border-radius:6px;z-index:1000;pointer-events:none;
-    backdrop-filter:blur(4px);
+    padding:8px 16px;border-radius:6px;z-index:2000;pointer-events:none;
   `;
   t.textContent = `⚠ ${msg}`;
   container.appendChild(t);
-  setTimeout(() => t.remove(), 3000);
+  setTimeout(() => t.remove(), 3500);
 }
