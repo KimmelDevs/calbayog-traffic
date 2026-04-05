@@ -1,14 +1,48 @@
 // pages/api/roads.js
+// Fetches all 18 named Calbayog proper streets from Overpass in one query.
+// No lat/lng needed — streets are fetched by name within the city bbox.
+
 export default async function handler(req, res) {
-  const { lat, lng } = req.query;
+  // Bounding box covering all of Calbayog proper
+  // south, west, north, east
+  const BBOX = "12.060,124.595,12.080,124.615";
 
-  if (!lat || !lng) {
-    return res.status(400).json({ error: "lat and lng are required" });
-  }
+  // All 18 streets by exact OSM name
+  const STREET_NAMES = [
+    "Magsaysay Boulevard",
+    "Navarro Street",
+    "Senator Tomas Gomez Street",
+    "Cajurao Street",
+    "Rosales Boulevard",
+    "Bugallon Street",
+    "Umbria Street",
+    "Jose D. Avelino Street",
+    "Asis Street",
+    "Rama Street",
+    "Burgos Street",
+    "Pido Street",
+    "Orquin Street",
+    "Pajarito Street",
+    "Rueda Street",
+    "Licenciado Street",
+    "Nijaga Street",
+    "Maharlika Highway",
+  ];
 
-  const delta = 0.003; // ~330m radius — gets all nearby roads
-  const bbox = `${+lat - delta},${+lng - delta},${+lat + delta},${+lng + delta}`;
-  const query = `[out:json][timeout:15];way["highway"~"^(primary|secondary|tertiary|residential|unclassified|trunk|service)$"](${bbox});out geom;`;
+  // Build one Overpass query that fetches all ways by name inside the bbox
+  const nameFilters = STREET_NAMES.map(
+    (n) => `way["name"="${n}"](${BBOX});`
+  ).join("\n");
+
+  // Also fetch Road #318478450 by OSM id directly
+  const query = `
+[out:json][timeout:25];
+(
+  ${nameFilters}
+  way(318478450);
+);
+out geom;
+`.trim();
 
   try {
     const response = await fetch("https://overpass-api.de/api/interpreter", {

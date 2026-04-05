@@ -20,10 +20,10 @@ const TrafficMap = dynamic(() => import("../components/TrafficMap"), {
 });
 
 export default function Home() {
-  const [activeView, setActiveView] = useState("map");
-  const [selectedHour, setSelectedHour] = useState(0);
+  const [activeView,      setActiveView]      = useState("map");
+  const [selectedHour,    setSelectedHour]    = useState(0);
   const [selectedSegment, setSelectedSegment] = useState(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPlaying,       setIsPlaying]       = useState(false);
   const playRef = useRef(null);
   const [segments, setSegments] = useState([]);
 
@@ -38,15 +38,18 @@ export default function Home() {
     );
   }, []);
 
-  // Replace ALL segments with newly fetched OSM roads
-  const handleReplaceRoads = (roads) => {
-    const day = new Date().getDay();
-    const newSegments = roads.map((road) => ({
-      ...road,
-      series: generateFullDaySeries(road.baseFlow, day),
-    }));
-    setSegments(newSegments);
-    setSelectedSegment(null); // clear old selection
+  // Called by TrafficMap when user applies insert-data form
+  const handleSegmentUpdate = (updatedRoad) => {
+    setSegments((prev) =>
+      prev.map((s) =>
+        s.id === updatedRoad.id
+          ? { ...s, baseFlow: updatedRoad.baseFlow, avgSpeed: updatedRoad.avgSpeed }
+          : s
+      )
+    );
+    if (selectedSegment?.id === updatedRoad.id) {
+      setSelectedSegment((prev) => ({ ...prev, baseFlow: updatedRoad.baseFlow }));
+    }
   };
 
   useEffect(() => {
@@ -94,7 +97,7 @@ export default function Home() {
                     segments={segments}
                     selectedHour={selectedHour}
                     onSelectSegment={setSelectedSegment}
-                    onReplaceRoads={handleReplaceRoads}
+                    onSegmentUpdate={handleSegmentUpdate}
                   />
                   <div style={{ position: "absolute", top: 12, left: 12, background: "#0f172acc", border: "1px solid #1e3a5f", borderRadius: 8, padding: "6px 12px", fontSize: 12, color: "#38bdf8", fontWeight: 700, backdropFilter: "blur(4px)", zIndex: 500, letterSpacing: "0.05em", pointerEvents: "none" }}>
                     {String(selectedHour).padStart(2, "0")}:00{" "}
