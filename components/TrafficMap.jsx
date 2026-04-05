@@ -1,6 +1,6 @@
 // components/TrafficMap.jsx
 import { useEffect, useRef, useState } from "react";
-import { getTrafficLevel, MAP_CENTER, MAP_ZOOM } from "../lib/trafficData";
+import { getTrafficLevel, generateFullDaySeries, MAP_CENTER, MAP_ZOOM } from "../lib/trafficData";
 
 // Module-level ref so Leaflet closures always call the latest onSelectSegment
 let _onSelect = null;
@@ -58,23 +58,25 @@ export default function TrafficMap({ segments, selectedHour, onSelectSegment, on
 
         for (const way of (data.elements || [])) {
           if (!way.geometry || way.geometry.length < 2) continue;
-          // Merge multiple OSM ways with the same name into one polyline
           const name = way.tags?.name || `Road #${way.id}`;
-          const key  = name; // group by name
+          const key  = name;
           if (!seen.has(key)) {
             seen.add(key);
+            const baseFlow = 80 + Math.floor(Math.random() * 500);
             roads.push({
-              id:       way.id,
+              id:          way.id,
               name,
-              shortName: name.length > 18 ? name.slice(0, 18) + "…" : name,
-              highway:  way.tags?.highway || "road",
-              nodes:    way.geometry,
-              baseFlow: 80 + Math.floor(Math.random() * 500),
-              avgSpeed: 15 + Math.floor(Math.random() * 35),
+              shortName:   name.length > 18 ? name.slice(0, 18) + "…" : name,
+              highway:     way.tags?.highway || "road",
+              nodes:       way.geometry,
+              baseFlow,
+              avgSpeed:    15 + Math.floor(Math.random() * 35),
               description: `${way.tags?.highway || "road"} · Calbayog proper`,
+              // Pre-generate 24-hr series so SegmentPanel always works
+              series:      generateFullDaySeries(baseFlow, day),
             });
           } else {
-            // Append extra geometry from duplicate OSM ways
+            // Append extra geometry from duplicate OSM ways with same name
             const existing = roads.find(r => r.name === name);
             if (existing) existing.nodes = [...existing.nodes, ...way.geometry];
           }
