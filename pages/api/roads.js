@@ -51,7 +51,24 @@ out geom;
       return res.status(502).json({ error: `Overpass returned ${response.status}` });
     }
 
-    const data = await response.json();
+    const raw = await response.json();
+
+    // Clip Gomez to only the middle segment between Avelino (~12.068) and Magsaysay (~12.072)
+    // This removes the top segment (near university) and the pantalan segment
+    const data = {
+      ...raw,
+      elements: (raw.elements || []).map(way => {
+        const name = way.tags?.name || "";
+        if (/Gomez/i.test(name) && way.geometry) {
+          return {
+            ...way,
+            geometry: way.geometry.filter(n => n.lat >= 12.0675 && n.lat <= 12.0725),
+          };
+        }
+        return way;
+      }).filter(way => !way.geometry || way.geometry.length >= 2),
+    };
+
     return res.status(200).json(data);
   } catch (err) {
     console.error("Overpass fetch error:", err);
