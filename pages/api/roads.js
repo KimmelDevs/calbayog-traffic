@@ -59,17 +59,18 @@ out geom;
       const name = way.tags?.name || "";
       if (name === "Jose D. Avelino Street" && way.geometry && way.geometry.length >= 2) {
         const mid = Math.ceil(way.geometry.length / 2);
+        // Skip one node at the split point to create a visible gap
         splitElements.push({
           ...way,
           id:       `${way.id}-1`,
           tags:     { ...way.tags, name: "Jose D. Avelino Street(1)" },
-          geometry: way.geometry.slice(0, mid + 1), // slight overlap at midpoint
+          geometry: way.geometry.slice(0, mid - 1),
         });
         splitElements.push({
           ...way,
           id:       `${way.id}-2`,
           tags:     { ...way.tags, name: "Jose D. Avelino Street(2)" },
-          geometry: way.geometry.slice(mid),
+          geometry: way.geometry.slice(mid + 1),
         });
       } else {
         splitElements.push(way);

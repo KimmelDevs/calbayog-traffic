@@ -348,6 +348,24 @@ function drawRoads(map, L, osmRoads, staticSegments, selectedHour) {
         L.DomEvent.stopPropagation(e);
         _onSelect?.(road);
       });
+
+      // ── Divider marker at the split point of Avelino ─────────
+      if (road.name === "Jose D. Avelino Street(1)" && coords.length > 0) {
+        const splitPt = coords[coords.length - 1];
+        // White gap circle — visually breaks the two halves
+        const divOuter = L.circleMarker(splitPt, {
+          radius: 7, color: "#0f172a", fillColor: "#0f172a",
+          fillOpacity: 1, weight: 3,
+        }).addTo(map);
+        divOuter._isTL = true;
+        // Coloured ring on top
+        const divInner = L.circleMarker(splitPt, {
+          radius: 4, color: "#fff", fillColor: "#fff",
+          fillOpacity: 1, weight: 2,
+        }).addTo(map);
+        divInner._isTL = true;
+        divInner.bindTooltip("SPLIT POINT", { permanent: false, direction: "top", offset: [0, -8] });
+      }
     }
   } else {
     // ── Fallback: draw static from→to segments ───────────────────
