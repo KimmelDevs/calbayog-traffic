@@ -53,11 +53,34 @@ out geom;
 
     const raw = await response.json();
 
+    // Split Jose D. Avelino Street into two halves
+    const splitElements = [];
+    for (const way of (raw.elements || [])) {
+      const name = way.tags?.name || "";
+      if (name === "Jose D. Avelino Street" && way.geometry && way.geometry.length >= 2) {
+        const mid = Math.ceil(way.geometry.length / 2);
+        splitElements.push({
+          ...way,
+          id:       `${way.id}-1`,
+          tags:     { ...way.tags, name: "Jose D. Avelino Street(1)" },
+          geometry: way.geometry.slice(0, mid + 1), // slight overlap at midpoint
+        });
+        splitElements.push({
+          ...way,
+          id:       `${way.id}-2`,
+          tags:     { ...way.tags, name: "Jose D. Avelino Street(2)" },
+          geometry: way.geometry.slice(mid),
+        });
+      } else {
+        splitElements.push(way);
+      }
+    }
+
     // Clip Gomez to only the middle segment between Avelino (~12.068) and Magsaysay (~12.072)
     // This removes the top segment (near university) and the pantalan segment
     const data = {
       ...raw,
-      elements: (raw.elements || []).map(way => {
+      elements: splitElements.map(way => {
         const name = way.tags?.name || "";
         if (/Gomez/i.test(name) && way.geometry) {
           return {
