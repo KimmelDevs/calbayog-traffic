@@ -62,7 +62,7 @@ out geom;
         if (/Gomez/i.test(name) && way.geometry) {
           return {
             ...way,
-            geometry: way.geometry.filter(n => n.lat >= 12.0675 && n.lat <= 12.0725),
+            geometry: way.geometry.filter(n => n.lat >= 12.0675 && n.lat <= 12.0715),
           };
         }
         return way;
