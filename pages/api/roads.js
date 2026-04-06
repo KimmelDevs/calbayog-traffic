@@ -2,11 +2,12 @@
 // Fetches named Calbayog proper streets from Overpass in one query.
 
 export default async function handler(req, res) {
-  // Tight bbox — Calbayog city proper only, keeps Gomez clipped to the middle section
-  // south, west, north, east
+  // Main city grid bbox
   const BBOX = "12.062,124.597,12.078,124.612";
 
-  // Streets fetched by exact name (Maharlika Highway excluded)
+  // Gomez extended west to 124.590 to reach the pantalan (port/waterfront)
+  const GOMEZ_BBOX = "12.062,124.590,12.078,124.612";
+
   const EXACT_NAMES = [
     "Magsaysay Boulevard",
     "Navarro Street",
@@ -30,14 +31,11 @@ export default async function handler(req, res) {
     (n) => `way["name"="${n}"](${BBOX});`
   ).join("\n  ");
 
-  // Senator Gomez — regex to catch OSM name variations, same tight bbox keeps only the inner segment
-  // Road #318478450 fetched by OSM id but clipped to the same bbox via the (if:) filter
   const query = `
 [out:json][timeout:30];
 (
   ${exactFilters}
-  way["name"~"Gomez",i](${BBOX});
-  way(318478450)(${BBOX});
+  way["name"~"Gomez",i](${GOMEZ_BBOX});
 );
 out geom;
 `.trim();
