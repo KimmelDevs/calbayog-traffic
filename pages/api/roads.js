@@ -1,30 +1,14 @@
 // pages/api/roads.js
-// Fetches named Calbayog proper streets from Overpass in one query.
+// Fetches only the 4 roads with real training data from Overpass.
 
 export default async function handler(req, res) {
-  // Main city grid bbox
-  const BBOX = "12.062,124.597,12.078,124.612";
-
-  // Gomez extended west to 124.590 to reach the pantalan (port/waterfront)
+  const BBOX       = "12.062,124.597,12.078,124.612";
   const GOMEZ_BBOX = "12.062,124.590,12.078,124.612";
 
   const EXACT_NAMES = [
-    "Magsaysay Boulevard",
-    "Navarro Street",
     "Cajurao Street",
-    "Rosales Boulevard",
-    "Bugallon Street",
-    "Umbria Street",
-    "Jose D. Avelino Street",
-    "Asis Street",
-    "Rama Street",
-    "Burgos Street",
-    "Pido Street",
-    "Orquin Street",
-    "Pajarito Street",
+    "Magsaysay Boulevard",
     "Rueda Street",
-    "Licenciado Street",
-    "Nijaga Street",
   ];
 
   const exactFilters = EXACT_NAMES.map(
@@ -53,42 +37,10 @@ out geom;
 
     const raw = await response.json();
 
-    // Split Jose D. Avelino Street into two halves
-    const splitElements = [];
-    for (const way of (raw.elements || [])) {
-      const name = way.tags?.name || "";
-      if (name === "Jose D. Avelino Street" && way.geometry && way.geometry.length >= 2) {
-        // Sort nodes west to east by longitude for a clean geographic split
-        const sorted = [...way.geometry].sort((a, b) => a.lon - b.lon);
-        const minLon = sorted[0].lon;
-        const maxLon = sorted[sorted.length - 1].lon;
-        const midLon = (minLon + maxLon) / 2;
-
-        const half1 = way.geometry.filter(n => n.lon <= midLon);
-        const half2 = way.geometry.filter(n => n.lon >  midLon);
-
-        if (half1.length >= 2) splitElements.push({
-          ...way,
-          id:       `${way.id}-1`,
-          tags:     { ...way.tags, name: "Jose D. Avelino Street(1)" },
-          geometry: half1,
-        });
-        if (half2.length >= 2) splitElements.push({
-          ...way,
-          id:       `${way.id}-2`,
-          tags:     { ...way.tags, name: "Jose D. Avelino Street(2)" },
-          geometry: half2,
-        });
-      } else {
-        splitElements.push(way);
-      }
-    }
-
-    // Clip Gomez to only the middle segment between Avelino (~12.068) and Magsaysay (~12.072)
-    // This removes the top segment (near university) and the pantalan segment
+    // Clip Gomez to only the middle segment
     const data = {
       ...raw,
-      elements: splitElements.map(way => {
+      elements: (raw.elements || []).map(way => {
         const name = way.tags?.name || "";
         if (/Gomez/i.test(name) && way.geometry) {
           return {
