@@ -1,14 +1,7 @@
 // pages/api/predict.js
-/**
- * LSTM Traffic Flow Prediction API Route
- *
- * In production, this endpoint should:
- * 1. Accept a road segment ID and target hours
- * 2. Query your trained LSTM model (via TensorFlow Serving, Python backend, etc.)
- * 3. Return predicted vehicle flow values
- *
- * Currently returns simulated data matching the LSTM curve shape.
- */
+// NOTE: TensorFlow.js runs client-side in this app.
+// This API route is kept for server-side or testing use only.
+// For real predictions, call predictCongestion() from lib/trafficData.js directly in your components.
 
 import { ROAD_SEGMENTS, simulateLSTMFlow } from "../../lib/trafficData";
 
@@ -18,35 +11,35 @@ export default function handler(req, res) {
   }
 
   const { segmentId, hours } = req.query;
-
-  // Validate segment
   const seg = ROAD_SEGMENTS.find((s) => s.id === Number(segmentId));
+
   if (segmentId && !seg) {
     return res.status(404).json({ error: `Segment ${segmentId} not found` });
   }
 
-  const segments = seg ? [seg] : ROAD_SEGMENTS;
-  const day = new Date().getDay();
+  const segments    = seg ? [seg] : ROAD_SEGMENTS;
+  const day         = new Date().getDay();
   const targetHours = hours
     ? hours.split(",").map(Number)
     : Array.from({ length: 24 }, (_, i) => i);
 
+  // ⚠️  Still using simulation here — real inference runs client-side via TF.js
+  // To use the real model server-side, set up a Python FastAPI sidecar instead
   const predictions = segments.map((s) => ({
-    id: s.id,
+    id:   s.id,
     name: s.name,
     predictions: targetHours.map((h) => ({
-      hour: h,
+      hour:  h,
       label: `${String(h).padStart(2, "0")}:00`,
-      flow: simulateLSTMFlow(s.baseFlow, h, day),
-      // Replace above with real model inference:
-      // flow: await model.predict({ segmentId: s.id, hour: h, dayOfWeek: day })
+      flow:  simulateLSTMFlow(s.baseFlow, h, day),
     })),
   }));
 
   return res.status(200).json({
-    success: true,
+    success:   true,
     timestamp: new Date().toISOString(),
     dayOfWeek: day,
-    data: predictions,
+    note:      "Server-side simulation. Real LSTM predictions run client-side via TF.js.",
+    data:      predictions,
   });
 }

@@ -58,19 +58,26 @@ out geom;
     for (const way of (raw.elements || [])) {
       const name = way.tags?.name || "";
       if (name === "Jose D. Avelino Street" && way.geometry && way.geometry.length >= 2) {
-        const mid = Math.ceil(way.geometry.length / 2);
-        // Skip one node at the split point to create a visible gap
-        splitElements.push({
+        // Sort nodes west to east by longitude for a clean geographic split
+        const sorted = [...way.geometry].sort((a, b) => a.lon - b.lon);
+        const minLon = sorted[0].lon;
+        const maxLon = sorted[sorted.length - 1].lon;
+        const midLon = (minLon + maxLon) / 2;
+
+        const half1 = way.geometry.filter(n => n.lon <= midLon);
+        const half2 = way.geometry.filter(n => n.lon >  midLon);
+
+        if (half1.length >= 2) splitElements.push({
           ...way,
           id:       `${way.id}-1`,
           tags:     { ...way.tags, name: "Jose D. Avelino Street(1)" },
-          geometry: way.geometry.slice(0, mid - 1),
+          geometry: half1,
         });
-        splitElements.push({
+        if (half2.length >= 2) splitElements.push({
           ...way,
           id:       `${way.id}-2`,
           tags:     { ...way.tags, name: "Jose D. Avelino Street(2)" },
-          geometry: way.geometry.slice(mid + 1),
+          geometry: half2,
         });
       } else {
         splitElements.push(way);

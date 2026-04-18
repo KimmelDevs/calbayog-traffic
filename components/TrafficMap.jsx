@@ -13,6 +13,30 @@ export default function TrafficMap({ segments, selectedHour, onSelectSegment, on
   const [status,   setStatus]   = useState("loading"); // loading | ready | error
   const [roadCount, setRoadCount] = useState(0);
 
+  // Visibility toggle panel
+  const [visOpen,     setVisOpen]     = useState(false);
+  const [hiddenRoads, setHiddenRoads] = useState(new Set());
+
+  const toggleRoadVisibility = (id) => {
+    setHiddenRoads(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      const ref = mapObjRef.current;
+      if (ref) {
+        const visible = osmRoadsRef.current.filter(r => !next.has(String(r.id)));
+        drawRoads(ref.map, ref.L, visible, segments, selectedHour);
+      }
+      return next;
+    });
+  };
+
+  const toggleAll = (show) => {
+    const next = show ? new Set() : new Set(osmRoadsRef.current.map(r => String(r.id)));
+    setHiddenRoads(next);
+    const ref = mapObjRef.current;
+    if (ref) drawRoads(ref.map, ref.L, show ? osmRoadsRef.current : [], segments, selectedHour);
+  };
+
   // Insert-data panel
   const [panelOpen, setPanelOpen] = useState(true);
   const [form,      setForm]      = useState({ roadId: "", vehicles: "", avgSpeed: "" });
@@ -147,6 +171,79 @@ export default function TrafficMap({ segments, selectedHour, onSelectSegment, on
         {status === "loading" && "⟳  LOADING CALBAYOG STREETS…"}
         {status === "ready"   && `✓  ${roadCount} STREETS ACTIVE  ·  CLICK A ROAD TO INSPECT`}
         {status === "error"   && "⚠  OVERPASS UNAVAILABLE — SHOWING FALLBACK DATA"}
+      </div>
+
+      {/* ── Street Visibility Panel ── */}
+      <div style={{ position: "absolute", bottom: 70, left: 12, zIndex: 1000, fontFamily: "'JetBrains Mono', monospace" }}>
+        {/* Toggle button */}
+        <button
+          onClick={() => setVisOpen(v => !v)}
+          style={{
+            background: "#0f172af5", border: "1px solid #1e3a5f",
+            color: "#38bdf8", fontSize: 10, letterSpacing: "0.08em", fontWeight: 700,
+            padding: "7px 14px", borderRadius: visOpen ? "8px 8px 0 0" : 8,
+            cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+            fontFamily: "inherit", width: "100%",
+          }}
+        >
+          <span>{visOpen ? "▾" : "▸"}</span> STREET VISIBILITY
+        </button>
+
+        {/* Expandable list */}
+        {visOpen && (
+          <div style={{
+            background: "#0f172af5", border: "1px solid #1e3a5f", borderTop: "none",
+            borderRadius: "0 0 8px 8px", padding: "8px 0",
+            maxHeight: 320, overflowY: "auto", minWidth: 230,
+          }}>
+            {/* Show all / Hide all */}
+            <div style={{ display: "flex", gap: 6, padding: "0 10px 8px", borderBottom: "1px solid #1e293b", marginBottom: 4 }}>
+              <button onClick={() => toggleAll(true)} style={{
+                flex: 1, background: "#1e293b", border: "1px solid #334155",
+                color: "#22c55e", fontSize: 9, padding: "4px 0", borderRadius: 4,
+                cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.06em",
+              }}>SHOW ALL</button>
+              <button onClick={() => toggleAll(false)} style={{
+                flex: 1, background: "#1e293b", border: "1px solid #334155",
+                color: "#ef4444", fontSize: 9, padding: "4px 0", borderRadius: 4,
+                cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.06em",
+              }}>HIDE ALL</button>
+            </div>
+
+            {/* Per-road toggles */}
+            {osmRoadsRef.current.map(road => {
+              const id      = String(road.id);
+              const visible = !hiddenRoads.has(id);
+              const traffic = getTrafficLevel(road.baseFlow);
+              return (
+                <div
+                  key={id}
+                  onClick={() => toggleRoadVisibility(id)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    padding: "5px 12px", cursor: "pointer",
+                    opacity: visible ? 1 : 0.35,
+                    transition: "opacity 0.15s",
+                  }}
+                >
+                  {/* Colour dot */}
+                  <span style={{
+                    width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
+                    background: visible ? traffic.color : "#334155",
+                  }}/>
+                  {/* Road name */}
+                  <span style={{ fontSize: 10, color: visible ? "#e2e8f0" : "#475569", flex: 1 }}>
+                    {road.name}
+                  </span>
+                  {/* Toggle indicator */}
+                  <span style={{ fontSize: 9, color: visible ? "#22c55e" : "#475569" }}>
+                    {visible ? "ON" : "OFF"}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* ── Insert Road Data panel ── */}
@@ -349,22 +446,20 @@ function drawRoads(map, L, osmRoads, staticSegments, selectedHour) {
         _onSelect?.(road);
       });
 
-      // ── Divider marker at the split point of Avelino ─────────
+      // ── Divider marker at the geographic center split of Avelino ──
       if (road.name === "Jose D. Avelino Street(1)" && coords.length > 0) {
         const splitPt = coords[coords.length - 1];
-        // White gap circle — visually breaks the two halves
         const divOuter = L.circleMarker(splitPt, {
           radius: 7, color: "#0f172a", fillColor: "#0f172a",
           fillOpacity: 1, weight: 3,
         }).addTo(map);
         divOuter._isTL = true;
-        // Coloured ring on top
         const divInner = L.circleMarker(splitPt, {
           radius: 4, color: "#fff", fillColor: "#fff",
           fillOpacity: 1, weight: 2,
         }).addTo(map);
         divInner._isTL = true;
-        divInner.bindTooltip("SPLIT POINT", { permanent: false, direction: "top", offset: [0, -8] });
+        divInner.bindTooltip("── SPLIT ──", { permanent: false, direction: "top", offset: [0, -8] });
       }
     }
   } else {
