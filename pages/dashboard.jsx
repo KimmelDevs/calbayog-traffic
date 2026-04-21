@@ -8,6 +8,7 @@ import SegmentPanel from "../components/SegmentPanel";
 import AnalyticsView from "../components/AnalyticsView";
 import AboutView from "../components/AboutView";
 import DataInputView from "../components/DataInputView";
+import EvalDashboard from "../components/EvalDashboard";
 import { ROAD_SEGMENTS, generateFullDaySeries } from "../lib/trafficData";
 
 const TrafficMap = dynamic(() => import("../components/TrafficMap"), {
@@ -116,6 +117,7 @@ export default function Home() {
             )}
             {activeView === "about" && <AboutView />}
             {activeView === "input" && <DataInputView />}
+            {activeView === "eval" && <EvalDashboard />}
           </main>
         </div>
       </div>
