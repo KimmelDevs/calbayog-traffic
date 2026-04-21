@@ -1,6 +1,6 @@
 // components/TrafficMap.jsx
 import { useEffect, useRef, useState } from "react";
-import { getTrafficLevel, generateFullDaySeries, MAP_CENTER, MAP_ZOOM } from "../lib/trafficData";
+import { getTrafficLevel, getTrafficLevelFromLabel, generateFullDaySeries, predictCongestion, loadModel, ROAD_SEGMENTS, MAP_CENTER, MAP_ZOOM } from "../lib/trafficData";
 
 // Module-level ref so Leaflet closures always call the latest onSelectSegment
 let _onSelect = null;
@@ -37,13 +37,45 @@ export default function TrafficMap({ segments, selectedHour, onSelectSegment, on
     if (ref) drawRoads(ref.map, ref.L, show ? osmRoadsRef.current : [], segments, selectedHour);
   };
 
-  // Insert-data panel
-  const [panelOpen, setPanelOpen] = useState(true);
-  const [form,      setForm]      = useState({ roadId: "", vehicles: "", avgSpeed: "" });
-  const [applied,   setApplied]   = useState(false);
+  // ── Prediction panel state ──────────────────────────────────
+  const [predOpen,     setPredOpen]     = useState(true);
+  const [predRoad,     setPredRoad]     = useState(ROAD_SEGMENTS[0]?.name ?? "");
+  const [predDay,      setPredDay]      = useState(new Date().getDay());
+  const [predHour,     setPredHour]     = useState(new Date().getHours());
+  const [predResult,   setPredResult]   = useState(null);
+  const [predLoading,  setPredLoading]  = useState(false);
+  const [roadPredMap,  setRoadPredMap]  = useState({});
 
-  const previewFlow  = parseInt(form.vehicles);
-  const previewLevel = !isNaN(previewFlow) && previewFlow >= 0 ? getTrafficLevel(previewFlow) : null;
+  const DAYS_LABEL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const CONGESTION_COLORS = { LIGHT:"#22c55e", MODERATE:"#f59e0b", TRAFFIC:"#ef4444" };
+
+  const handlePredict = async () => {
+    setPredLoading(true);
+    try {
+      await loadModel();
+      // Predict for selected road
+      const result = await predictCongestion(predRoad, predHour, predDay);
+      setPredResult(result);
+
+      // Predict for ALL roads and update map colors
+      const predictions = {};
+      for (const seg of ROAD_SEGMENTS) {
+        const r = await predictCongestion(seg.name, predHour, predDay);
+        predictions[seg.name] = r.label;
+      }
+      setRoadPredMap(predictions);
+
+      // Redraw map with LSTM colors
+      const ref = mapObjRef.current;
+      if (ref) drawRoadsWithPredictions(ref.map, ref.L, osmRoadsRef.current, predictions);
+    } catch (err) {
+      console.error("Prediction error:", err);
+    } finally {
+      setPredLoading(false);
+    }
+  };
+
+
 
   _onSelect = onSelectSegment;
 
@@ -131,32 +163,6 @@ export default function TrafficMap({ segments, selectedHour, onSelectSegment, on
   }, [segments, selectedHour]);
 
   // ── Apply insert-data form ─────────────────────────────────────
-  const handleApply = () => {
-    const flow = parseInt(form.vehicles);
-    const spd  = parseInt(form.avgSpeed);
-    if (isNaN(flow) || flow < 0 || !form.roadId) return;
-
-    const updated = osmRoadsRef.current.map(r =>
-      String(r.id) === form.roadId
-        ? { ...r, baseFlow: flow, avgSpeed: !isNaN(spd) && spd > 0 ? spd : r.avgSpeed }
-        : r
-    );
-    osmRoadsRef.current = updated;
-
-    const ref = mapObjRef.current;
-    if (ref) drawRoads(ref.map, ref.L, updated, segments, selectedHour);
-
-    if (onSegmentUpdate) {
-      const road = updated.find(r => String(r.id) === form.roadId);
-      if (road) onSegmentUpdate(road);
-    }
-
-    setApplied(true);
-    setTimeout(() => setApplied(false), 2000);
-  };
-
-  const roadOptions = osmRoadsRef.current.map(r => ({ value: String(r.id), label: r.name }));
-
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <div ref={mapRef} style={{ width: "100%", height: "100%" }} />
@@ -246,150 +252,121 @@ export default function TrafficMap({ segments, selectedHour, onSelectSegment, on
         )}
       </div>
 
-      {/* ── Insert Road Data panel ── */}
-      {panelOpen ? (
+      {/* ── LSTM Prediction Panel ── */}
+      {predOpen ? (
         <div style={{
-          position: "absolute", top: 12, right: 12, zIndex: 1000,
-          background: "#0f172af5", border: "1px solid #1e3a5f",
-          borderRadius: 10, padding: "14px 16px", width: 240,
+          position: "absolute", top: 12, left: 12, zIndex: 1000,
+          background: "#0a1220f5", border: "1px solid #1e3a5f",
+          borderRadius: 10, padding: "14px 16px", width: 250,
           backdropFilter: "blur(8px)", fontFamily: "'JetBrains Mono', monospace",
         }}>
           {/* Header */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <span style={{ fontSize: 10, color: "#38bdf8", letterSpacing: "0.1em", fontWeight: 700 }}>
-              INSERT ROAD DATA
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+            <span style={{ fontSize:10, color:"#38bdf8", letterSpacing:"0.1em", fontWeight:700 }}>
+              🔮 LSTM PREDICTION
             </span>
-            <button onClick={() => setPanelOpen(false)} style={{
-              background: "none", border: "none", color: "#475569",
-              cursor: "pointer", fontSize: 14, lineHeight: 1, padding: 0,
-            }}>✕</button>
+            <button onClick={() => setPredOpen(false)} style={{ background:"none", border:"none", color:"#475569", cursor:"pointer", fontSize:14 }}>✕</button>
           </div>
 
-          {/* Road selector */}
-          <div style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.1em", marginBottom: 4 }}>ROAD</div>
-            <select
-              value={form.roadId}
-              onChange={e => setForm({ ...form, roadId: e.target.value })}
-              style={{
-                width: "100%", background: "#1e293b", border: "1px solid #1e3a5f",
-                borderRadius: 5, padding: "6px 8px", fontSize: 11, color: "#94a3b8",
-                fontFamily: "inherit",
-              }}
-            >
-              <option value="">— select road —</option>
-              {roadOptions.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
+          {/* Road */}
+          <div style={{ marginBottom:8 }}>
+            <div style={{ fontSize:9, color:"#475569", letterSpacing:"0.1em", marginBottom:4 }}>ROAD</div>
+            <select value={predRoad} onChange={e => setPredRoad(e.target.value)}
+              style={{ width:"100%", background:"#1e293b", border:"1px solid #1e3a5f", borderRadius:5, padding:"6px 8px", fontSize:11, color:"#94a3b8", fontFamily:"inherit" }}>
+              {ROAD_SEGMENTS.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
             </select>
-            {status === "loading" && (
-              <div style={{ fontSize: 9, color: "#334155", marginTop: 3 }}>loading streets…</div>
-            )}
           </div>
 
-          {/* Vehicle count */}
-          <div style={{ marginBottom: 6 }}>
-            <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.1em", marginBottom: 4 }}>
-              VEHICLE COUNT (veh/hr)
+          {/* Day */}
+          <div style={{ marginBottom:8 }}>
+            <div style={{ fontSize:9, color:"#475569", letterSpacing:"0.1em", marginBottom:4 }}>DAY</div>
+            <select value={predDay} onChange={e => setPredDay(Number(e.target.value))}
+              style={{ width:"100%", background:"#1e293b", border:"1px solid #1e3a5f", borderRadius:5, padding:"6px 8px", fontSize:11, color:"#94a3b8", fontFamily:"inherit" }}>
+              {DAYS_LABEL.map((d,i) => <option key={i} value={i}>{d}</option>)}
+            </select>
+          </div>
+
+          {/* Hour */}
+          <div style={{ marginBottom:12 }}>
+            <div style={{ fontSize:9, color:"#475569", letterSpacing:"0.1em", marginBottom:4 }}>
+              HOUR — {String(predHour).padStart(2,"0")}:00
             </div>
-            <input
-              type="number" min={0} max={9999} placeholder="e.g. 450"
-              value={form.vehicles}
-              onChange={e => setForm({ ...form, vehicles: e.target.value })}
-              style={{
-                width: "100%", background: "#1e293b", border: "1px solid #1e3a5f",
-                borderRadius: 5, padding: "6px 8px", fontSize: 11, color: "#e2e8f0",
-                fontFamily: "inherit", boxSizing: "border-box",
-              }}
-            />
+            <input type="range" min={0} max={23} value={predHour}
+              onChange={e => setPredHour(Number(e.target.value))}
+              style={{ width:"100%", accentColor:"#3b82f6" }} />
+            <div style={{ display:"flex", justifyContent:"space-between", fontSize:8, color:"#334155", marginTop:2 }}>
+              <span>12AM</span><span>6AM</span><span>12PM</span><span>6PM</span><span>11PM</span>
+            </div>
           </div>
 
-          {/* Live level preview */}
-          {previewLevel && (
-            <div style={{
-              display: "flex", alignItems: "center", gap: 6,
-              background: "#1e293b", border: `1px solid ${previewLevel.color}44`,
-              borderRadius: 5, padding: "5px 8px", marginBottom: 6,
-            }}>
-              <div style={{ width: 7, height: 7, borderRadius: "50%", background: previewLevel.color, flexShrink: 0 }}/>
-              <span style={{ fontSize: 10, color: previewLevel.color, fontWeight: 700 }}>
-                {previewLevel.label.toUpperCase()}
-              </span>
-              <span style={{ fontSize: 9, color: "#334155", marginLeft: "auto" }}>
-                {previewFlow < 200 ? "<200" : previewFlow < 350 ? "200–349" : previewFlow < 500 ? "350–499" : "≥500"}
-              </span>
+          {/* Predict button */}
+          <button onClick={handlePredict} disabled={predLoading}
+            style={{ width:"100%", padding:"8px 0", borderRadius:6, border:"none",
+              background: predLoading ? "#1e293b" : "linear-gradient(90deg,#3b82f6,#06b6d4)",
+              color: predLoading ? "#475569" : "#fff",
+              fontSize:11, fontWeight:700, letterSpacing:"0.1em",
+              cursor: predLoading ? "not-allowed" : "pointer", fontFamily:"inherit" }}>
+            {predLoading ? "PREDICTING..." : "PREDICT →"}
+          </button>
+
+          {/* Result */}
+          {predResult && (
+            <div style={{ marginTop:12, padding:"10px 12px", borderRadius:8,
+              background: CONGESTION_COLORS[predResult.label]+"18",
+              border:`1px solid ${CONGESTION_COLORS[predResult.label]}40` }}>
+              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
+                <div style={{ width:9, height:9, borderRadius:"50%",
+                  background:CONGESTION_COLORS[predResult.label],
+                  boxShadow:`0 0 8px ${CONGESTION_COLORS[predResult.label]}` }} />
+                <span style={{ fontSize:13, fontWeight:700, color:CONGESTION_COLORS[predResult.label] }}>
+                  {predResult.label}
+                </span>
+                <span style={{ fontSize:10, color:"#475569", marginLeft:"auto" }}>
+                  {predResult.confidence}% confidence
+                </span>
+              </div>
+              <div style={{ display:"flex", gap:4 }}>
+                {Object.entries(predResult.probabilities).map(([cls, pct]) => (
+                  <div key={cls} style={{ flex:1, textAlign:"center" }}>
+                    <div style={{ fontSize:9, color:CONGESTION_COLORS[cls], marginBottom:2 }}>{cls}</div>
+                    <div style={{ height:3, background:CONGESTION_COLORS[cls]+"40", borderRadius:2, overflow:"hidden" }}>
+                      <div style={{ width:`${pct}%`, height:"100%", background:CONGESTION_COLORS[cls] }} />
+                    </div>
+                    <div style={{ fontSize:8, color:"#475569", marginTop:1 }}>{pct}%</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ marginTop:8, fontSize:9, color:"#334155" }}>
+                Map updated with predictions for all roads
+              </div>
             </div>
           )}
 
-          {/* Avg speed */}
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.1em", marginBottom: 4 }}>
-              AVG SPEED (km/h)
+          {/* All roads prediction summary */}
+          {Object.keys(roadPredMap).length > 0 && (
+            <div style={{ marginTop:10, paddingTop:10, borderTop:"1px solid #1e293b" }}>
+              <div style={{ fontSize:8, color:"#334155", letterSpacing:"0.1em", marginBottom:6 }}>ALL ROADS</div>
+              {Object.entries(roadPredMap).map(([name, label]) => (
+                <div key={name} style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
+                  <div style={{ width:6, height:6, borderRadius:"50%", background:CONGESTION_COLORS[label], flexShrink:0 }} />
+                  <span style={{ fontSize:9, color:"#94a3b8", flex:1 }}>{name.replace(" Street","").replace(" Boulevard","")}</span>
+                  <span style={{ fontSize:8, color:CONGESTION_COLORS[label], fontWeight:700 }}>{label}</span>
+                </div>
+              ))}
             </div>
-            <input
-              type="number" min={0} max={120} placeholder="e.g. 30"
-              value={form.avgSpeed}
-              onChange={e => setForm({ ...form, avgSpeed: e.target.value })}
-              style={{
-                width: "100%", background: "#1e293b", border: "1px solid #1e3a5f",
-                borderRadius: 5, padding: "6px 8px", fontSize: 11, color: "#e2e8f0",
-                fontFamily: "inherit", boxSizing: "border-box",
-              }}
-            />
-          </div>
-
-          {/* Apply button */}
-          <button
-            onClick={handleApply}
-            disabled={!form.roadId || !form.vehicles}
-            style={{
-              width: "100%", padding: "8px 0", borderRadius: 6, border: "none",
-              background: applied
-                ? "#1d4ed8"
-                : (!form.roadId || !form.vehicles ? "#1e293b" : "#3b82f6"),
-              color: applied
-                ? "#93c5fd"
-                : (!form.roadId || !form.vehicles ? "#334155" : "#fff"),
-              fontSize: 11, fontWeight: 700,
-              cursor: !form.roadId || !form.vehicles ? "not-allowed" : "pointer",
-              letterSpacing: "0.08em", transition: "background 0.2s", fontFamily: "inherit",
-            }}
-          >
-            {applied ? "✓  APPLIED!" : "APPLY TO MAP"}
-          </button>
-
-          {/* Level guide */}
-          <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #1e293b" }}>
-            <div style={{ fontSize: 8, color: "#334155", letterSpacing: "0.1em", marginBottom: 6 }}>
-              AUTO-LEVEL GUIDE
-            </div>
-            {[
-              { range: "< 200 veh/hr",   color: "#22c55e", label: "Light"     },
-              { range: "200–349 veh/hr", color: "#f59e0b", label: "Moderate"  },
-              { range: "350–499 veh/hr", color: "#f97316", label: "Heavy"     },
-              { range: "≥ 500 veh/hr",   color: "#ef4444", label: "Congested" },
-            ].map(({ range, color, label }) => (
-              <div key={label} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                <div style={{ width: 6, height: 6, borderRadius: "50%", background: color, flexShrink: 0 }}/>
-                <span style={{ fontSize: 9, color, width: 62, fontWeight: 700 }}>{label}</span>
-                <span style={{ fontSize: 9, color: "#334155" }}>{range}</span>
-              </div>
-            ))}
-          </div>
+          )}
         </div>
       ) : (
-        <button
-          onClick={() => setPanelOpen(true)}
-          style={{
-            position: "absolute", top: 12, right: 12, zIndex: 1000,
-            background: "#0f172a", border: "1px solid #1e3a5f", color: "#38bdf8",
-            fontFamily: "'JetBrains Mono', monospace", fontSize: 10, letterSpacing: "0.08em",
-            padding: "7px 14px", borderRadius: 6, cursor: "pointer",
-          }}
-        >
-          + INSERT DATA
+        <button onClick={() => setPredOpen(true)} style={{
+          position:"absolute", top:12, left:12, zIndex:1000,
+          background:"#0f172a", border:"1px solid #1e3a5f", color:"#38bdf8",
+          fontFamily:"'JetBrains Mono', monospace", fontSize:10, letterSpacing:"0.08em",
+          padding:"7px 14px", borderRadius:6, cursor:"pointer",
+        }}>
+          🔮 PREDICT
         </button>
       )}
+
     </div>
   );
 }
@@ -491,5 +468,41 @@ function drawRoads(map, L, osmRoads, staticSegments, selectedHour) {
         _onSelect?.(seg);
       });
     }
+  }
+}
+
+// ── Draw roads colored by LSTM predictions ────────────────────────────────
+function drawRoadsWithPredictions(map, L, osmRoads, predMap) {
+  if (!map || !L || !osmRoads.length) return;
+
+  const COLORS = { LIGHT:"#22c55e", MODERATE:"#f59e0b", TRAFFIC:"#ef4444" };
+  const WEIGHTS = { LIGHT:4, MODERATE:6, TRAFFIC:8 };
+
+  map.eachLayer(l => { if (l._isTL) l.remove(); });
+
+  for (const road of osmRoads) {
+    const coords = road.nodes.map(n => [n.lat, n.lon]);
+    const label  = predMap[road.name] ?? "LIGHT";
+    const color  = COLORS[label];
+    const weight = WEIGHTS[label];
+
+    const glow = L.polyline(coords, { color, weight: weight + 8, opacity: 0.2 }).addTo(map);
+    glow._isTL = true;
+
+    const pl = L.polyline(coords, { color, weight, opacity: 0.92 }).addTo(map);
+    pl._isTL = true;
+
+    pl.bindTooltip(`
+      <div style="min-width:170px;font-family:monospace">
+        <div style="font-weight:700;color:#38bdf8;margin-bottom:3px">${road.name}</div>
+        <div style="color:${color};font-size:12px;font-weight:700">● ${label}</div>
+        <div style="color:#475569;font-size:10px">LSTM prediction</div>
+      </div>
+    `, { sticky:true, offset:[10,0] });
+
+    pl.on("click", (e) => {
+      L.DomEvent.stopPropagation(e);
+      _onSelect?.(road);
+    });
   }
 }
