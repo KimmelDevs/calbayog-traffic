@@ -50,28 +50,43 @@ export default function TrafficMap({ segments, selectedHour, onSelectSegment, on
   const CONGESTION_COLORS = { LIGHT:"#22c55e", MODERATE:"#f59e0b", TRAFFIC:"#ef4444" };
 
   const handlePredict = async () => {
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    console.log("[MAP] PREDICT button clicked");
+    console.log(`[MAP] Road: ${predRoad} | Day: ${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][predDay]} | Hour: ${predHour}:00`);
     setPredLoading(true);
     try {
+      console.log("[MAP] Loading LSTM model...");
       await loadModel();
-      // Predict for selected road
+      console.log("[MAP] Model ready — running prediction for selected road...");
+
       const result = await predictCongestion(predRoad, predHour, predDay);
       setPredResult(result);
+      console.log(`[MAP] Selected road result:`, result);
 
-      // Predict for ALL roads and update map colors
+      console.log("[MAP] Running predictions for all roads...");
       const predictions = {};
       for (const seg of ROAD_SEGMENTS) {
         const r = await predictCongestion(seg.name, predHour, predDay);
         predictions[seg.name] = r.label;
+        console.log(`[MAP]   ${seg.name} → ${r.label} (${r.confidence}%)`);
       }
       setRoadPredMap(predictions);
+      console.log("[MAP] All road predictions:", predictions);
 
-      // Redraw map with LSTM colors
       const ref = mapObjRef.current;
-      if (ref) drawRoadsWithPredictions(ref.map, ref.L, osmRoadsRef.current, predictions);
+      if (ref) {
+        console.log("[MAP] Redrawing map with LSTM colors...");
+        drawRoadsWithPredictions(ref.map, ref.L, osmRoadsRef.current, predictions);
+        console.log("[MAP] ✅ Map redrawn");
+      } else {
+        console.warn("[MAP] ⚠️ mapObjRef is null — map not drawn");
+      }
     } catch (err) {
-      console.error("Prediction error:", err);
+      console.error("[MAP] ❌ Prediction error:", err);
+      console.error("[MAP] Stack:", err.stack);
     } finally {
       setPredLoading(false);
+      console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     }
   };
 
