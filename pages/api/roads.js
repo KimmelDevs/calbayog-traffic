@@ -54,6 +54,9 @@ export default function handler(req, res) {
         type: "way", id: 149402407,
         tags: { name: "Rueda Street", highway: "tertiary" },
         geometry: [
+          { lat: 12.0718000, lon: 124.5985000 },
+          { lat: 12.0715000, lon: 124.5980000 },
+          { lat: 12.0712000, lon: 124.5976000 },
           { lat: 12.0709638, lon: 124.5970657 },
           { lat: 12.0709979, lon: 124.5970041 },
           { lat: 12.0710038, lon: 124.5969718 },
@@ -63,6 +66,8 @@ export default function handler(req, res) {
           { lat: 12.0706156, lon: 124.5967264 },
           { lat: 12.0702688, lon: 124.5965776 },
           { lat: 12.0688942, lon: 124.5959198 },
+          { lat: 12.0682000, lon: 124.5955000 },
+          { lat: 12.0675000, lon: 124.5950000 },
         ],
       },
 
@@ -158,8 +163,6 @@ export default function handler(req, res) {
           { lat: 12.0711535, lon: 124.5924914 },
           { lat: 12.0713133, lon: 124.5922925 },
           { lat: 12.0715280, lon: 124.5921287 },
-          { lat: 12.0727864, lon: 124.5910639 },
-          { lat: 12.0738321, lon: 124.5901790 },
         ],
       },
     ],
