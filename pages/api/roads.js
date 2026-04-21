@@ -71,18 +71,6 @@ export default function handler(req, res) {
         type: "way", id: 181227877,
         tags: { name: "Senator Tomas Gomez Street", highway: "secondary" },
         geometry: [
-          { lat: 12.0780620, lon: 124.5995666 },
-          { lat: 12.0769718, lon: 124.5994411 },
-          { lat: 12.0763501, lon: 124.5993546 },
-          { lat: 12.0754484, lon: 124.5992377 },
-          { lat: 12.0741124, lon: 124.5990583 },
-          { lat: 12.0739910, lon: 124.5990420 },
-          { lat: 12.0738187, lon: 124.5989843 },
-          { lat: 12.0736415, lon: 124.5989029 },
-          { lat: 12.0734778, lon: 124.5987294 },
-          { lat: 12.0726203, lon: 124.5971881 },
-          { lat: 12.0725869, lon: 124.5971281 },
-          { lat: 12.0725320, lon: 124.5970300 },
           { lat: 12.0721755, lon: 124.5963928 },
           { lat: 12.0714457, lon: 124.5951113 },
           { lat: 12.0714083, lon: 124.5950534 },
@@ -125,16 +113,53 @@ export default function handler(req, res) {
         ],
       },
 
-      // ── Cajurao Street (approximated — not in OSM) ────────────────────────
+      // ── Cajurao Street (real OSM coordinates) ───────────────────────────
       {
-        type: "way", id: 999999001,
+        type: "way", id: 149557784,
+        tags: { name: "Cajurao Street", highway: "tertiary", oneway: "yes" },
+        geometry: [
+          { lat: 12.0688942, lon: 124.5959198 },
+          { lat: 12.0691648, lon: 124.5954690 },
+          { lat: 12.0694537, lon: 124.5950257 },
+        ],
+      },
+      {
+        type: "way", id: 155021770,
+        tags: { name: "Cajurao Street", highway: "tertiary", oneway: "yes" },
+        geometry: [
+          { lat: 12.0694537, lon: 124.5950257 },
+          { lat: 12.0698156, lon: 124.5944674 },
+          { lat: 12.0700485, lon: 124.5941226 },
+          { lat: 12.0704953, lon: 124.5934443 },
+        ],
+      },
+      {
+        type: "way", id: 1311923612,
         tags: { name: "Cajurao Street", highway: "tertiary" },
         geometry: [
-          { lat: 12.0716, lon: 124.5960 },
-          { lat: 12.0715, lon: 124.5955 },
-          { lat: 12.0714, lon: 124.5948 },
-          { lat: 12.0713, lon: 124.5942 },
-          { lat: 12.0712, lon: 124.5935 },
+          { lat: 12.0704953, lon: 124.5934443 },
+          { lat: 12.0705171, lon: 124.5934137 },
+        ],
+      },
+      {
+        type: "way", id: 155021771,
+        tags: { name: "Cajurao Street", highway: "tertiary", bridge: "yes" },
+        geometry: [
+          { lat: 12.0705171, lon: 124.5934137 },
+          { lat: 12.0707793, lon: 124.5930076 },
+        ],
+      },
+      {
+        type: "way", id: 254486309,
+        tags: { name: "Cajurao Street", highway: "tertiary" },
+        geometry: [
+          { lat: 12.0707793, lon: 124.5930076 },
+          { lat: 12.0709606, lon: 124.5927460 },
+          { lat: 12.0711535, lon: 124.5924914 },
+          { lat: 12.0713133, lon: 124.5922925 },
+          { lat: 12.0715280, lon: 124.5921287 },
+          { lat: 12.0727864, lon: 124.5910639 },
+          { lat: 12.0738321, lon: 124.5901790 },
         ],
       },
     ],
