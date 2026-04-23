@@ -1,146 +1,170 @@
 // components/AboutView.jsx
 export default function AboutView() {
-  return (
-    <div
-      style={{
-        flex: 1,
-        overflowY: "auto",
-        padding: 32,
-        maxWidth: 820,
-      }}
-    >
-      <div style={{ fontSize: 10, color: "#334155", letterSpacing: "0.15em", marginBottom: 4 }}>
-        ABOUT THIS SYSTEM
-      </div>
-      <h1
-        style={{
-          fontSize: 24,
-          fontWeight: 700,
-          color: "#38bdf8",
-          marginBottom: 4,
-          letterSpacing: "0.03em",
-        }}
-      >
-        Data-Driven Traffic Flow Prediction
-      </h1>
-      <div style={{ fontSize: 13, color: "#64748b", marginBottom: 32 }}>
-        Calbayog City, Samar — Powered by Long Short-Term Memory (LSTM) Neural Networks
-      </div>
 
-      <Block title="Overview">
-        This system predicts and visualizes traffic flow patterns across key road segments in
-        Calbayog City proper. It uses an LSTM-based deep learning model trained on historical
-        traffic data to forecast vehicle volume by hour of day.
-      </Block>
+  const members = [
+    { name: "Solitarios, Jelou",    role: "Leader",  icon: "👑" },
+    { name: "Goyala, Kevin",        role: "Member",  icon: "💻" },
+    { name: "Cortaga, Mark Dan",    role: "Member",  icon: "💻" },
+    { name: "Dealagdon, Davenz",    role: "Member",  icon: "💻" },
+  ];
 
-      <Block title="Objectives">
-        <ol style={{ paddingLeft: 20, color: "#94a3b8", fontSize: 13, lineHeight: 2 }}>
-          <li>Collect and preprocess traffic-related data from Calbayog City road network.</li>
-          <li>Design and implement an LSTM-based predictive model for traffic flow.</li>
-          <li>Evaluate model performance using prediction accuracy metrics.</li>
-          <li>
-            Develop a user-friendly interface to visualize predicted traffic flow trends for
-            drivers, commuters, and city authorities.
-          </li>
-        </ol>
-      </Block>
+  const techStack = [
+    { label: "Frontend",     value: "Next.js · React · Leaflet.js" },
+    { label: "ML Model",     value: "LSTM · TensorFlow / Keras" },
+    { label: "Inference",    value: "TensorFlow.js (in-browser)" },
+    { label: "Database",     value: "Supabase (PostgreSQL)" },
+    { label: "Auth",         value: "Supabase Auth" },
+    { label: "Deployment",   value: "Vercel" },
+    { label: "Map Data",     value: "OpenStreetMap · Leaflet" },
+    { label: "Training Data","value": "28 days · 4 roads · 15-min intervals" },
+  ];
 
-      <Block title="Technology Stack">
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          {[
-            { tech: "Next.js", role: "React framework (frontend)" },
-            { tech: "OpenStreetMap", role: "Open-source map tiles" },
-            { tech: "Leaflet.js", role: "Interactive map rendering" },
-            { tech: "LSTM (TensorFlow)", role: "Deep learning prediction model" },
-            { tech: "MySQL", role: "Traffic data storage" },
-            { tech: "React", role: "UI components" },
-          ].map((t) => (
-            <div
-              key={t.tech}
-              style={{
-                background: "#0f172a",
-                border: "1px solid #1e3a5f",
-                borderRadius: 8,
-                padding: "10px 14px",
-              }}
-            >
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#38bdf8" }}>{t.tech}</div>
-              <div style={{ fontSize: 11, color: "#475569" }}>{t.role}</div>
-            </div>
-          ))}
-        </div>
-      </Block>
-
-      <Block title="LSTM Model">
-        Long Short-Term Memory (LSTM) networks are a type of recurrent neural network (RNN)
-        designed to learn long-term temporal dependencies in sequential data. For traffic
-        prediction, LSTM captures patterns such as daily peaks (morning and evening rush hours)
-        and weekly periodicity (weekday vs. weekend traffic).
-        <br /><br />
-        The model is trained on historical traffic volume data (vehicles per hour) for selected
-        road segments in Calbayog City, and predicts the next 24 hours of traffic flow.
-      </Block>
-
-      <Block title="Scope & Limitations">
-        <ul style={{ paddingLeft: 20, color: "#94a3b8", fontSize: 13, lineHeight: 2 }}>
-          <li>Coverage limited to selected road segments in Calbayog City proper only.</li>
-          <li>Model does not account for accidents, roadworks, or special events.</li>
-          <li>Requires stable internet connection for map rendering.</li>
-          <li>Prediction accuracy depends on quality and quantity of historical data.</li>
-          <li>No mobile offline functionality in the current version.</li>
-        </ul>
-      </Block>
-
-      <Block title="Research Context">
-        This system was developed as part of an academic research project (Group 5) examining
-        data-driven approaches to urban traffic management in Philippine cities. The study
-        addresses the growing traffic congestion challenges in Calbayog City by applying
-        state-of-the-art deep learning techniques to local road network data.
-      </Block>
-
-      <div
-        style={{
-          marginTop: 16,
-          padding: "14px 16px",
-          background: "#0f172a",
-          border: "1px solid #1e3a5f",
-          borderRadius: 8,
-          fontSize: 10,
-          color: "#334155",
-          letterSpacing: "0.05em",
-        }}
-      >
-        Group 5 — Calbayog City LSTM Traffic Prediction System — Academic Research Project
-      </div>
+  const card = (children, style = {}) => (
+    <div style={{
+      background: "#0f172a", border: "1px solid #1e3a5f",
+      borderRadius: 10, padding: 24, ...style,
+    }}>
+      {children}
     </div>
   );
-}
 
-function Block({ title, children }) {
+  const sectionTitle = (text) => (
+    <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.18em", marginBottom: 16, fontFamily: "monospace" }}>
+      {text}
+    </div>
+  );
+
   return (
-    <div style={{ marginBottom: 28 }}>
-      <div
-        style={{
-          fontSize: 10,
-          color: "#3b82f6",
-          letterSpacing: "0.15em",
-          marginBottom: 10,
-          fontWeight: 700,
-          textTransform: "uppercase",
-        }}
-      >
-        {title}
-      </div>
-      <div
-        style={{
-          fontSize: 13,
-          color: "#94a3b8",
-          lineHeight: 1.8,
-          borderLeft: "2px solid #1e3a5f",
-          paddingLeft: 16,
-        }}
-      >
-        {children}
+    <div style={{
+      flex: 1, overflowY: "auto", padding: 32,
+      background: "#070d1a", color: "#e2e8f0",
+      display: "flex", flexDirection: "column", gap: 20,
+      alignItems: "center",
+    }}>
+      <div style={{ width: "100%", maxWidth: 780 }}>
+
+        {/* Hero */}
+        {card(
+          <div style={{ textAlign: "center", padding: "12px 0" }}>
+            <div style={{ fontSize: 40, marginBottom: 16 }}>🚦</div>
+            <div style={{ fontSize: 10, color: "#334155", letterSpacing: "0.22em", marginBottom: 10, fontFamily: "monospace" }}>
+              UNDERGRADUATE THESIS PROJECT · 2025
+            </div>
+            <h1 style={{
+              fontSize: "clamp(18px, 3vw, 26px)", fontWeight: 800,
+              lineHeight: 1.3, marginBottom: 12,
+              background: "linear-gradient(135deg, #e2e8f0 0%, #38bdf8 60%, #818cf8 100%)",
+              WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+            }}>
+              An Data-Driven Traffic Flow Prediction System<br />
+              in Calbayog City Using LSTM
+            </h1>
+            <div style={{ fontSize: 12, color: "#334155", letterSpacing: "0.06em" }}>
+              Northwest Samar State University
+            </div>
+          </div>
+        )}
+
+        {/* Team + Adviser side by side */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+
+          {/* Team */}
+          {card(<>
+            {sectionTitle("RESEARCH TEAM")}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {members.map((m, i) => (
+                <div key={i} style={{
+                  display: "flex", alignItems: "center", gap: 14,
+                  padding: "12px 14px", borderRadius: 8,
+                  background: m.role === "Leader" ? "rgba(59,130,246,0.06)" : "rgba(255,255,255,0.01)",
+                  border: `1px solid ${m.role === "Leader" ? "#3b82f630" : "#1e3a5f"}`,
+                }}>
+                  <div style={{
+                    width: 36, height: 36, borderRadius: "50%",
+                    background: m.role === "Leader"
+                      ? "linear-gradient(135deg,#3b82f6,#06b6d4)"
+                      : "#1e293b",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 16, flexShrink: 0,
+                    boxShadow: m.role === "Leader" ? "0 0 12px #3b82f640" : "none",
+                  }}>
+                    {m.icon}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#e2e8f0" }}>
+                      {m.name}
+                    </div>
+                    <div style={{
+                      fontSize: 9, letterSpacing: "0.12em", marginTop: 2,
+                      color: m.role === "Leader" ? "#38bdf8" : "#475569",
+                    }}>
+                      {m.role.toUpperCase()}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>)}
+
+          {/* Adviser + abstract */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {card(<>
+              {sectionTitle("THESIS ADVISER")}
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <div style={{
+                  width: 44, height: 44, borderRadius: "50%",
+                  background: "linear-gradient(135deg,#a78bfa,#6366f1)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 20, flexShrink: 0,
+                  boxShadow: "0 0 14px #6366f140",
+                }}>
+                  🎓
+                </div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#e2e8f0" }}>
+                    Gregor P. Diongon
+                  </div>
+                  <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.12em", marginTop: 2 }}>
+                    THESIS ADVISER
+                  </div>
+                </div>
+              </div>
+            </>)}
+
+            {card(<>
+              {sectionTitle("ABSTRACT")}
+              <p style={{ fontSize: 11, color: "#475569", lineHeight: 1.8 }}>
+                This study presents a data-driven traffic flow prediction system for
+                Calbayog City using Long Short-Term Memory (LSTM) neural networks.
+                The system predicts congestion levels — Light, Moderate, and Heavy —
+                across four key road segments using historical 15-minute interval
+                vehicle count data, achieving <span style={{ color: "#38bdf8", fontWeight: 700 }}>94.61% accuracy</span> on
+                the combined model.
+              </p>
+            </>)}
+          </div>
+        </div>
+
+        {/* Tech stack */}
+        {card(<>
+          {sectionTitle("TECHNOLOGY STACK")}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10 }}>
+            {techStack.map((t, i) => (
+              <div key={i} style={{ background: "#0a1628", borderRadius: 7, padding: "12px 14px" }}>
+                <div style={{ fontSize: 8, color: "#334155", letterSpacing: "0.12em", marginBottom: 5, fontFamily: "monospace" }}>
+                  {t.label.toUpperCase()}
+                </div>
+                <div style={{ fontSize: 11, color: "#38bdf8" }}>{t.value}</div>
+              </div>
+            ))}
+          </div>
+        </>)}
+
+        {/* Footer */}
+        <div style={{ textAlign: "center", fontSize: 9, color: "#1e3a5f", letterSpacing: "0.15em", fontFamily: "monospace", paddingBottom: 8 }}>
+          © 2025 GROUP 5 · NORTHWEST SAMAR STATE UNIVERSITY · ALL RIGHTS RESERVED
+        </div>
+
       </div>
     </div>
   );
