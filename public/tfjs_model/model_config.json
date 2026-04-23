@@ -1,6 +1,6 @@
 {
-  "modelDir": "/tfjs_model",
   "lookback": 8,
+  "nFeatures": 12,
   "nClasses": 3,
   "classNames": [
     "LIGHT",
@@ -28,7 +28,7 @@
     "Senator Tomas Gomez Street": 3
   },
   "scaler": {
-    "min": 19.0,
-    "max": 143.0
+    "min": 19,
+    "max": 143
   }
 }

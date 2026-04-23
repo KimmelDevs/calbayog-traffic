@@ -42,6 +42,7 @@ export default function TrafficMap({ segments, selectedHour, onSelectSegment, on
   const [predRoad,     setPredRoad]     = useState(ROAD_SEGMENTS[0]?.name ?? "");
   const [predDay,      setPredDay]      = useState(new Date().getDay());
   const [predHour,     setPredHour]     = useState(new Date().getHours());
+  const [predCount,    setPredCount]    = useState(50);
   const [predResult,   setPredResult]   = useState(null);
   const [predLoading,  setPredLoading]  = useState(false);
   const [roadPredMap,  setRoadPredMap]  = useState({});
@@ -59,14 +60,14 @@ export default function TrafficMap({ segments, selectedHour, onSelectSegment, on
       await loadModel();
       console.log("[MAP] Model ready — running prediction for selected road...");
 
-      const result = await predictCongestion(predRoad, predHour, predDay);
+      const result = await predictCongestion(predRoad, predHour, predDay, predCount);
       setPredResult(result);
       console.log(`[MAP] Selected road result:`, result);
 
       console.log("[MAP] Running predictions for all roads...");
       const predictions = {};
       for (const seg of ROAD_SEGMENTS) {
-        const r = await predictCongestion(seg.name, predHour, predDay);
+        const r = await predictCongestion(seg.name, predHour, predDay, predCount);
         predictions[seg.name] = r.label;
         console.log(`[MAP]   ${seg.name} → ${r.label} (${r.confidence}%)`);
       }
@@ -311,6 +312,19 @@ export default function TrafficMap({ segments, selectedHour, onSelectSegment, on
               style={{ width:"100%", accentColor:"#3b82f6" }} />
             <div style={{ display:"flex", justifyContent:"space-between", fontSize:8, color:"#334155", marginTop:2 }}>
               <span>12AM</span><span>6AM</span><span>12PM</span><span>6PM</span><span>11PM</span>
+            </div>
+          </div>
+
+          {/* Vehicle Count */}
+          <div style={{ marginBottom:12 }}>
+            <div style={{ fontSize:9, color:"#475569", letterSpacing:"0.1em", marginBottom:4 }}>
+              VEHICLE COUNT — {predCount}
+            </div>
+            <input type="range" min={0} max={200} value={predCount}
+              onChange={e => setPredCount(Number(e.target.value))}
+              style={{ width:"100%", accentColor:"#3b82f6" }} />
+            <div style={{ display:"flex", justifyContent:"space-between", fontSize:8, color:"#334155", marginTop:2 }}>
+              <span>0 (LIGHT)</span><span>100</span><span>200 (TRAFFIC)</span>
             </div>
           </div>
 
