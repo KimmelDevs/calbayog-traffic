@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/router";
 import Head from "next/head";
 import { supabase } from "../lib/supabase";
-
+import { useState, useEffect } from "react";
 export const dynamic = 'force-dynamic';
 export const ssr = false;
 
