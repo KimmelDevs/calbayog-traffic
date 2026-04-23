@@ -66,7 +66,7 @@ export default function Header({ activeView, onViewChange }) {
         {[
           { id: "map", icon: "🗺️", label: "MAP" },
           { id: "analytics", icon: "📊", label: "ANALYTICS" },
-          { id: "input", icon: "📥", label: "INPUT DATA" },
+          ...(userRole === "admin" ? [{ id: "input", icon: "📥", label: "INPUT DATA" }] : []),
           { id: "eval", icon: "📊", label: "EVALUATION" },
           { id: "about", icon: "ℹ️", label: "ABOUT" },
         ].map((v) => (

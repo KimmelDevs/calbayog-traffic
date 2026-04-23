@@ -1,5 +1,5 @@
 // pages/auth.jsx
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/router";
 import Head from "next/head";
 import { supabase } from "../lib/supabase";
@@ -12,15 +12,10 @@ export default function Auth() {
   const [confirm,  setConfirm]  = useState("");
   const [error,    setError]    = useState("");
   const [loading,  setLoading]  = useState(false);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) router.replace("/dashboard");
-    });
-  }, []);
+  const [success,  setSuccess]  = useState("");
 
   const handleSubmit = async () => {
-    setError("");
+    setError(""); setSuccess("");
     if (!email || !password) { setError("Email and password are required."); return; }
     if (mode === "signup" && password !== confirm) { setError("Passwords do not match."); return; }
     if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
@@ -30,13 +25,22 @@ export default function Auth() {
       if (mode === "login") {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        router.replace("/dashboard");
       } else {
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
+        // Don't auto-redirect — show success message
+        setSuccess("Account created! You can now sign in.");
+        setMode("login");
+        setEmail(""); setPassword(""); setConfirm("");
       }
-      router.replace("/dashboard");
     } catch (err) {
-      setError(err.message || "Something went wrong.");
+      const msgs = {
+        "Invalid login credentials": "Incorrect email or password.",
+        "User already registered":   "An account with this email already exists.",
+        "Email not confirmed":        "Please confirm your email before logging in.",
+      };
+      setError(msgs[err.message] || err.message || "Something went wrong.");
     } finally {
       setLoading(false);
     }
@@ -48,8 +52,7 @@ export default function Auth() {
     border: "1px solid #1e3a5f", borderRadius: 6,
     color: "#e2e8f0", fontSize: 13, outline: "none",
     fontFamily: "'Space Mono', monospace",
-    transition: "border-color 0.2s",
-    boxSizing: "border-box",
+    transition: "border-color 0.2s", boxSizing: "border-box",
   };
 
   return (
@@ -99,7 +102,7 @@ export default function Auth() {
             {mode === "login" ? "Welcome back" : "Create account"}
           </h2>
           <p style={{ fontSize:12, color:"#334155", marginBottom:28, fontFamily:"'Space Mono',monospace", letterSpacing:"0.05em" }}>
-            {mode === "login" ? "Researcher / admin access only" : "Register a new researcher account"}
+            {mode === "login" ? "Sign in to access the dashboard" : "Register a new account"}
           </p>
 
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
@@ -121,7 +124,12 @@ export default function Auth() {
 
           {error && (
             <div style={{ marginTop:14, padding:"10px 14px", borderRadius:6, background:"rgba(239,68,68,0.08)", border:"1px solid #ef444430", fontSize:11, color:"#f87171", fontFamily:"'Space Mono',monospace" }}>
-              {error}
+              ❌ {error}
+            </div>
+          )}
+          {success && (
+            <div style={{ marginTop:14, padding:"10px 14px", borderRadius:6, background:"rgba(34,197,94,0.08)", border:"1px solid #22c55e30", fontSize:11, color:"#4ade80", fontFamily:"'Space Mono',monospace" }}>
+              ✅ {success}
             </div>
           )}
 
@@ -131,7 +139,7 @@ export default function Auth() {
 
           <div style={{ marginTop:20, textAlign:"center", fontSize:12, color:"#334155" }}>
             {mode === "login" ? "No account? " : "Already registered? "}
-            <button className="toggle-btn" onClick={() => { setMode(mode==="login"?"signup":"login"); setError(""); }}>
+            <button className="toggle-btn" onClick={() => { setMode(mode==="login"?"signup":"login"); setError(""); setSuccess(""); }}>
               {mode === "login" ? "Sign up" : "Sign in"}
             </button>
           </div>
