@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { DAYS_OF_WEEK } from "../lib/trafficData";
 
-export default function Header({ activeView, onViewChange }) {
+export default function Header({ activeView, onViewChange, userRole }) {
   const [time, setTime] = useState(null);
 
   useEffect(() => {
