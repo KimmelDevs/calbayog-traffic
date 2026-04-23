@@ -211,11 +211,11 @@ export default function Landing() {
 
           {/* Buttons */}
           <div className="fade-up-3" style={{ display: "flex", gap: 14, flexWrap: "wrap", justifyContent: "center", marginBottom: 56 }}>
-            <button className="btn-primary" onClick={() => router.push("/dashboard")}>
-              OPEN DASHBOARD →
+            <button className="btn-primary" onClick={() => router.push("/auth")}>
+              SIGN IN →
             </button>
-            <button className="btn-secondary" onClick={() => router.push("/auth")}>
-              RESEARCHER LOGIN
+            <button className="btn-secondary" onClick={() => { router.push("/auth?mode=signup"); }}>
+              CREATE ACCOUNT
             </button>
           </div>
 

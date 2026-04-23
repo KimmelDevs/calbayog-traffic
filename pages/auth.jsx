@@ -17,6 +17,10 @@ export default function Auth() {
   const [loading,  setLoading]  = useState(false);
   const [success,  setSuccess]  = useState("");
 
+  useEffect(() => {
+    if (router.query.mode === "signup") setMode("signup");
+  }, [router.query]);
+
   const handleSubmit = async () => {
     setError(""); setSuccess("");
     if (!email || !password) { setError("Email and password are required."); return; }
