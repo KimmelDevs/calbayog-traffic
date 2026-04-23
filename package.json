@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.104.0",
     "@tensorflow/tfjs": "^4.22.0",
     "date-fns": "^3.6.0",
     "leaflet": "^1.9.4",
