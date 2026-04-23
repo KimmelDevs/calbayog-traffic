@@ -4,6 +4,9 @@ import { useRouter } from "next/router";
 import Head from "next/head";
 import { supabase } from "../lib/supabase";
 
+export const dynamic = 'force-dynamic';
+export const ssr = false;
+
 export default function Auth() {
   const router  = useRouter();
   const [mode,     setMode]     = useState("login");
