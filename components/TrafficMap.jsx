@@ -58,27 +58,20 @@ export default function TrafficMap({ segments, selectedHour, onSelectSegment, on
     try {
       console.log("[MAP] Loading LSTM model...");
       await loadModel();
-      console.log("[MAP] Model ready — running prediction for selected road...");
+      console.log("[MAP] Model ready — running prediction for selected road only...");
 
-      // Pass null so predictCongestion uses simulateLSTMFlow (hour/day-based, within training range 19–143)
       const result = await predictCongestion(predRoad, predHour, predDay, null);
       setPredResult(result);
       console.log(`[MAP] Selected road result:`, result);
 
-      console.log("[MAP] Running predictions for all roads...");
-      const predictions = {};
-      for (const seg of ROAD_SEGMENTS) {
-        const r = await predictCongestion(seg.name, predHour, predDay, null);
-        predictions[seg.name] = r.label;
-        console.log(`[MAP]   ${seg.name} → ${r.label} (${r.confidence}%)`);
-      }
+      // Only store prediction for the selected road — map highlights just that one
+      const predictions = { [predRoad]: result.label };
       setRoadPredMap(predictions);
-      console.log("[MAP] All road predictions:", predictions);
 
       const ref = mapObjRef.current;
       if (ref) {
-        console.log("[MAP] Redrawing map with LSTM colors...");
-        drawRoadsWithPredictions(ref.map, ref.L, osmRoadsRef.current, predictions);
+        console.log("[MAP] Redrawing map — highlighting selected road only...");
+        drawRoadsWithPredictions(ref.map, ref.L, osmRoadsRef.current, predictions, predRoad);
         console.log("[MAP] ✅ Map redrawn");
       } else {
         console.warn("[MAP] ⚠️ mapObjRef is null — map not drawn");
@@ -352,7 +345,7 @@ export default function TrafficMap({ segments, selectedHour, onSelectSegment, on
                 ))}
               </div>
               <div style={{ marginTop:8, fontSize:9, color:"#334155" }}>
-                Map updated with predictions for all roads
+                Map updated — selected road highlighted
               </div>
             </div>
           )}
@@ -360,7 +353,7 @@ export default function TrafficMap({ segments, selectedHour, onSelectSegment, on
           {/* All roads prediction summary */}
           {Object.keys(roadPredMap).length > 0 && (
             <div style={{ marginTop:10, paddingTop:10, borderTop:"1px solid #1e293b" }}>
-              <div style={{ fontSize:8, color:"#334155", letterSpacing:"0.1em", marginBottom:6 }}>ALL ROADS</div>
+              <div style={{ fontSize:8, color:"#334155", letterSpacing:"0.1em", marginBottom:6 }}>SELECTED ROAD</div>
               {Object.entries(roadPredMap).map(([name, label]) => (
                 <div key={name} style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
                   <div style={{ width:6, height:6, borderRadius:"50%", background:CONGESTION_COLORS[label], flexShrink:0 }} />
@@ -487,37 +480,54 @@ function drawRoads(map, L, osmRoads, staticSegments, selectedHour) {
 }
 
 // ── Draw roads colored by LSTM predictions ────────────────────────────────
-function drawRoadsWithPredictions(map, L, osmRoads, predMap) {
+function drawRoadsWithPredictions(map, L, osmRoads, predMap, selectedRoad) {
   if (!map || !L || !osmRoads.length) return;
 
-  const COLORS = { LIGHT:"#22c55e", MODERATE:"#f59e0b", TRAFFIC:"#ef4444" };
+  const COLORS  = { LIGHT:"#22c55e", MODERATE:"#f59e0b", TRAFFIC:"#ef4444" };
   const WEIGHTS = { LIGHT:4, MODERATE:6, TRAFFIC:8 };
 
   map.eachLayer(l => { if (l._isTL) l.remove(); });
 
   for (const road of osmRoads) {
-    const coords = road.nodes.map(n => [n.lat, n.lon]);
-    const label  = predMap[road.name] ?? "LIGHT";
-    const color  = COLORS[label];
-    const weight = WEIGHTS[label];
+    const coords     = road.nodes.map(n => [n.lat, n.lon]);
+    const isSelected = road.name === selectedRoad;
+    const label      = predMap[road.name];
 
-    const glow = L.polyline(coords, { color, weight: weight + 8, opacity: 0.2 }).addTo(map);
-    glow._isTL = true;
+    if (isSelected && label) {
+      // ── Highlighted: predicted road ──────────────────────────
+      const color  = COLORS[label];
+      const weight = WEIGHTS[label];
 
-    const pl = L.polyline(coords, { color, weight, opacity: 0.92 }).addTo(map);
-    pl._isTL = true;
+      const glow = L.polyline(coords, { color, weight: weight + 10, opacity: 0.35 }).addTo(map);
+      glow._isTL = true;
 
-    pl.bindTooltip(`
-      <div style="min-width:170px;font-family:monospace">
-        <div style="font-weight:700;color:#38bdf8;margin-bottom:3px">${road.name}</div>
-        <div style="color:${color};font-size:12px;font-weight:700">● ${label}</div>
-        <div style="color:#475569;font-size:10px">LSTM prediction</div>
-      </div>
-    `, { sticky:true, offset:[10,0] });
+      const pl = L.polyline(coords, { color, weight, opacity: 1.0 }).addTo(map);
+      pl._isTL = true;
 
-    pl.on("click", (e) => {
-      L.DomEvent.stopPropagation(e);
-      _onSelect?.(road);
-    });
+      pl.bindTooltip(`
+        <div style="min-width:170px;font-family:monospace">
+          <div style="font-weight:700;color:#38bdf8;margin-bottom:3px">${road.name}</div>
+          <div style="color:${color};font-size:12px;font-weight:700">● ${label}</div>
+          <div style="color:#475569;font-size:10px">LSTM prediction</div>
+        </div>
+      `, { sticky:true, offset:[10,0] });
+
+      pl.on("click", (e) => { L.DomEvent.stopPropagation(e); _onSelect?.(road); });
+
+    } else {
+      // ── Dimmed: all other roads ───────────────────────────────
+      const traffic = getTrafficLevel(road.baseFlow);
+      const pl = L.polyline(coords, { color: "#334155", weight: 3, opacity: 0.35 }).addTo(map);
+      pl._isTL = true;
+
+      pl.bindTooltip(`
+        <div style="min-width:170px;font-family:monospace">
+          <div style="font-weight:700;color:#38bdf8;margin-bottom:3px">${road.name}</div>
+          <div style="color:#475569;font-size:11px">No prediction — select this road and click Predict</div>
+        </div>
+      `, { sticky:true, offset:[10,0] });
+
+      pl.on("click", (e) => { L.DomEvent.stopPropagation(e); _onSelect?.(road); });
+    }
   }
 }
