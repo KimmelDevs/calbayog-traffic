@@ -7,20 +7,6 @@
     "MODERATE",
     "TRAFFIC"
   ],
-  "featureCols": [
-    "Location_encoded",
-    "Vehicle_Count_scaled",
-    "Scaled_lag1",
-    "Scaled_lag2",
-    "Scaled_lag3",
-    "Scaled_lag4",
-    "Rolling_Mean_4",
-    "is_anomaly",
-    "hour_sin",
-    "hour_cos",
-    "day_sin",
-    "day_cos"
-  ],
   "locationEncoding": {
     "Cajurao Street": 0,
     "Magsaysay Boulevard": 1,
