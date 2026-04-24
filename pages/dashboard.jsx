@@ -9,7 +9,7 @@ import AnalyticsView from "../components/AnalyticsView";
 import AboutView from "../components/AboutView";
 import DataInputView from "../components/DataInputView";
 import EvalDashboard from "../components/EvalDashboard";
-import { ROAD_SEGMENTS, generateFullDaySeries } from "../lib/trafficData";
+import { ROAD_SEGMENTS, generateFullDaySeries, loadModel, predictCongestion, simulateLSTMFlow } from "../lib/trafficData";
 
 const TrafficMap = dynamic(() => import("../components/TrafficMap"), {
   ssr: false,
@@ -27,7 +27,11 @@ export default function Home() {
   const [selectedSegment, setSelectedSegment] = useState(null);
   const [isPlaying,       setIsPlaying]       = useState(false);
   const playRef = useRef(null);
+  const osmRoadsForSim = useRef([]); // filled by TrafficMap callback
   const [segments, setSegments] = useState([]);
+  const [selectedDay,  setSelectedDay]  = useState(new Date().getDay());
+  const [simResults,   setSimResults]   = useState({});
+  const [simLoading,   setSimLoading]   = useState(false);
 
   useEffect(() => {
     setSelectedHour(new Date().getHours());
@@ -54,16 +58,101 @@ export default function Home() {
     }
   };
 
+  // ── Roads the LSTM was trained on ────────────────────────────────────────
+  const LSTM_KNOWN_ROADS = ["Cajurao Street", "Magsaysay Boulevard", "Rueda Street", "Senator Tomas Gomez Street"];
+
+  // Convert simulated vehicle count → congestion result object
+  const flowToSimResult = (flow) => {
+    let label, conf, probs;
+    if (flow < 60) {
+      label = "LIGHT";    conf = 75 + Math.round(Math.random() * 20);
+      probs = { LIGHT: conf, MODERATE: Math.round((100-conf)*0.7), TRAFFIC: Math.round((100-conf)*0.3) };
+    } else if (flow < 100) {
+      label = "MODERATE"; conf = 65 + Math.round(Math.random() * 20);
+      probs = { LIGHT: Math.round((100-conf)*0.5), MODERATE: conf, TRAFFIC: Math.round((100-conf)*0.5) };
+    } else {
+      label = "TRAFFIC";  conf = 70 + Math.round(Math.random() * 20);
+      probs = { LIGHT: Math.round((100-conf)*0.2), MODERATE: Math.round((100-conf)*0.8), TRAFFIC: conf };
+    }
+    return { label, confidence: conf, probabilities: probs, simulated: true };
+  };
+
+  // ── Core prediction runner — accepts explicit hour+day so it's never stale ──
+  const runPredictions = useRef(null);
+  runPredictions.current = async (hour, day) => {
+    const allRoads = osmRoadsForSim.current.length > 0
+      ? osmRoadsForSim.current
+      : ROAD_SEGMENTS;
+    const results = {};
+
+    // Real LSTM on 4 trained roads
+    for (const knownName of LSTM_KNOWN_ROADS) {
+      try {
+        const r = await predictCongestion(knownName, hour, day, null);
+        results[knownName] = { ...r, simulated: false };
+      } catch(e) {
+        console.warn("LSTM failed for", knownName, e);
+      }
+    }
+
+    // simulateLSTMFlow for all other OSM roads
+    for (const road of allRoads) {
+      if (results[road.name]) continue;
+      const vehicleCount = simulateLSTMFlow(road.baseFlow ?? 200, hour, day);
+      results[road.name] = flowToSimResult(vehicleCount);
+    }
+
+    return results;
+  };
+
+  // ── Simulate button handler ───────────────────────────────────────────────
+  const handleSimulate = async () => {
+    setSimLoading(true);
+    setSimResults({});
+    try {
+      await loadModel();
+      const results = await runPredictions.current(selectedHour, selectedDay);
+      setSimResults(results);
+    } catch(err) {
+      console.error("Simulate error:", err);
+    } finally {
+      setSimLoading(false);
+    }
+  };
+
+  // ── Play interval — ticks hour AND re-runs predictions each step ──────────
   useEffect(() => {
     if (isPlaying) {
-      playRef.current = setInterval(() => setSelectedHour((h) => (h + 1) % 24), 700);
+      // Pre-load model so ticks don't stall
+      loadModel().catch(console.error);
+      let currentHour = selectedHour;
+      playRef.current = setInterval(async () => {
+        currentHour = (currentHour + 1) % 24;
+        setSelectedHour(currentHour);
+        try {
+          const results = await runPredictions.current(currentHour, selectedDay);
+          setSimResults(results);
+        } catch(e) {
+          console.warn("Play tick prediction failed:", e);
+        }
+      }, 900); // slightly slower than before to allow predictions to complete
     } else {
       clearInterval(playRef.current);
     }
     return () => clearInterval(playRef.current);
-  }, [isPlaying]);
+  }, [isPlaying]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleHourChange = (h) => { setSelectedHour(h); setIsPlaying(false); };
+  const handleHourChange = (h) => {
+    setSelectedHour(h);
+    setIsPlaying(false);
+    setSimResults({});  // changing hour invalidates predictions
+  };
+
+  const handleDayChange = (d) => {
+    setSelectedDay(d);
+    setIsPlaying(false);
+    setSimResults({});  // changing day invalidates predictions
+  };
   const isLoaded = segments.length > 0;
 
   return (
@@ -84,6 +173,11 @@ export default function Home() {
               onHourChange={handleHourChange}
               isPlaying={isPlaying}
               onTogglePlay={() => setIsPlaying((p) => !p)}
+              selectedDay={selectedDay}
+              onDayChange={handleDayChange}
+              onSimulate={handleSimulate}
+              simResults={simResults}
+              simLoading={simLoading}
             />
           ) : (
             <aside style={{ width: 270, background: "#0f172a", borderRight: "1px solid #1e3a5f", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -100,6 +194,8 @@ export default function Home() {
                     selectedHour={selectedHour}
                     onSelectSegment={setSelectedSegment}
                     onSegmentUpdate={handleSegmentUpdate}
+                    simResults={simResults}
+                    onOsmRoadsLoaded={(roads) => { osmRoadsForSim.current = roads; }}
                   />
                   <div style={{ position: "absolute", top: 12, left: 12, background: "#0f172acc", border: "1px solid #1e3a5f", borderRadius: 8, padding: "6px 12px", fontSize: 12, color: "#38bdf8", fontWeight: 700, backdropFilter: "blur(4px)", zIndex: 500, letterSpacing: "0.05em", pointerEvents: "none" }}>
                     {String(selectedHour).padStart(2, "0")}:00{" "}
