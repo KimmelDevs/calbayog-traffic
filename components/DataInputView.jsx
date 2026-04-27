@@ -18,16 +18,23 @@ const ROADS = [
 const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 const JS_DAY = { Sunday:0, Monday:1, Tuesday:2, Wednesday:3, Thursday:4, Friday:5, Saturday:6 };
 
-const HOURS = Array.from({ length: 24 }, (_, i) => {
-  const ampm = i < 12 ? "AM" : "PM";
-  const h    = i === 0 ? 12 : i > 12 ? i - 12 : i;
-  return { value: i, label: `${String(h).padStart(2,"0")}:00 ${ampm}` };
+// 96 slots: every 15 minutes from 00:00 to 23:45
+// value = decimal hour (8.25 = 8:15 AM), label = human-readable
+const SLOTS = Array.from({ length: 96 }, (_, i) => {
+  const totalMins = i * 15;
+  const hour24    = Math.floor(totalMins / 60);
+  const mins      = totalMins % 60;
+  const ampm      = hour24 < 12 ? "AM" : "PM";
+  const h12       = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24;
+  const value     = hour24 + mins / 60;                        // e.g. 8.25
+  const label     = `${String(h12).padStart(2,"0")}:${String(mins).padStart(2,"0")} ${ampm}`;
+  return { value, label };
 });
 
 const EMPTY_FORM = {
   road: ROADS[0],
   day: "Monday",
-  hour: 8,
+  hour: 8,           // 8.0 = 08:00 AM
   vehicle_count: "",
 };
 
@@ -251,17 +258,17 @@ export default function DataInputView() {
             </div>
           </div>
 
-          {/* Hour */}
+          {/* Time Slot */}
           <div style={{ marginBottom: 14 }}>
-            <label style={S.label}>Hour of Day</label>
+            <label style={S.label}>Time (15-min intervals)</label>
             <div style={{ position: "relative" }}>
               <select
                 value={form.hour}
                 onChange={e => setField("hour", Number(e.target.value))}
                 style={S.select}
               >
-                {HOURS.map(h => (
-                  <option key={h.value} value={h.value}>{h.label}</option>
+                {SLOTS.map(s => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
                 ))}
               </select>
               <span style={{ position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", color:"#475569", pointerEvents:"none", fontSize:10 }}>▾</span>
@@ -327,7 +334,7 @@ export default function DataInputView() {
 
             {/* Context */}
             <div style={{ fontSize: 10, color: "#64748b", marginBottom: 14, lineHeight: 1.8 }}>
-              {prediction.road} · {prediction.day} · {HOURS.find(h => h.value === prediction.hour)?.label} · {prediction.count} vehicles
+              {prediction.road} · {prediction.day} · {SLOTS.find(s => s.value === prediction.hour)?.label} · {prediction.count} vehicles
             </div>
 
             {/* Probability bars */}
@@ -415,7 +422,9 @@ export default function DataInputView() {
             {/* Rows */}
             <div style={{ maxHeight: 560, overflowY: "auto" }}>
               {logs.map((row, i) => {
-                const hourLabel = HOURS.find(h => h.value === row.hour)?.label ?? `${row.hour}:00`;
+                const hourLabel = SLOTS.find(s => s.value === row.hour)?.label
+                               ?? SLOTS.find(s => Math.abs(s.value - row.hour) < 0.01)?.label
+                               ?? `${row.hour}:00`;
                 const recorded  = new Date(row.recorded_at);
                 const timeAgo   = formatTimeAgo(recorded);
                 return (
