@@ -34,7 +34,7 @@ export default function Home() {
   const [simLoading,   setSimLoading]   = useState(false);
 
   useEffect(() => {
-    setSelectedHour(new Date().getHours());
+    // start at 00:00
     const day = new Date().getDay();
     setSegments(
       ROAD_SEGMENTS.map((s) => ({

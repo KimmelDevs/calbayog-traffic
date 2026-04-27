@@ -7,6 +7,56 @@ import { useState, useEffect } from "react";
 export const dynamic = 'force-dynamic';
 export const ssr = false;
 
+// ─── Moved OUTSIDE Auth so React never unmounts/remounts these on re-render ───
+
+const EyeIcon = ({ visible }) => visible ? (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+  </svg>
+) : (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+    <line x1="1" y1="1" x2="23" y2="23"/>
+  </svg>
+);
+
+const inputStyle = {
+  width: "100%", padding: "13px 16px",
+  background: "rgba(15,23,42,0.8)",
+  border: "1px solid #1e3a5f", borderRadius: 6,
+  color: "#e2e8f0", fontSize: 13, outline: "none",
+  fontFamily: "'Space Mono', monospace",
+  transition: "border-color 0.2s", boxSizing: "border-box",
+};
+
+const PasswordInput = ({ value, onChange, show, onToggle, onKeyDown, placeholder = "••••••••" }) => (
+  <div style={{ position: "relative" }}>
+    <input
+      type={show ? "text" : "password"}
+      value={value}
+      placeholder={placeholder}
+      onChange={onChange}
+      onKeyDown={onKeyDown}
+      style={{ ...inputStyle, paddingRight: 44 }}
+    />
+    <button
+      type="button"
+      onClick={onToggle}
+      style={{
+        position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)",
+        background: "none", border: "none", cursor: "pointer",
+        color: show ? "#38bdf8" : "#475569",
+        display: "flex", alignItems: "center", padding: 0,
+        transition: "color 0.2s",
+      }}
+    >
+      <EyeIcon visible={show} />
+    </button>
+  </div>
+);
+
+// ──────────────────────────────────────────────────────────────────────────────
+
 export default function Auth() {
   const router  = useRouter();
   const [mode,     setMode]     = useState("login");
@@ -54,51 +104,7 @@ export default function Auth() {
     }
   };
 
-  const inputStyle = {
-    width: "100%", padding: "13px 16px",
-    background: "rgba(15,23,42,0.8)",
-    border: "1px solid #1e3a5f", borderRadius: 6,
-    color: "#e2e8f0", fontSize: 13, outline: "none",
-    fontFamily: "'Space Mono', monospace",
-    transition: "border-color 0.2s", boxSizing: "border-box",
-  };
-
-  const EyeIcon = ({ visible }) => visible ? (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-    </svg>
-  ) : (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-      <line x1="1" y1="1" x2="23" y2="23"/>
-    </svg>
-  );
-
-  const PasswordInput = ({ value, onChange, show, onToggle, placeholder = "••••••••" }) => (
-    <div style={{ position: "relative" }}>
-      <input
-        type={show ? "text" : "password"}
-        value={value}
-        placeholder={placeholder}
-        onChange={onChange}
-        onKeyDown={e => e.key === "Enter" && handleSubmit()}
-        style={{ ...inputStyle, paddingRight: 44 }}
-      />
-      <button
-        type="button"
-        onClick={onToggle}
-        style={{
-          position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)",
-          background: "none", border: "none", cursor: "pointer",
-          color: show ? "#38bdf8" : "#475569",
-          display: "flex", alignItems: "center", padding: 0,
-          transition: "color 0.2s",
-        }}
-      >
-        <EyeIcon visible={show} />
-      </button>
-    </div>
-  );
+  const handleEnter = e => e.key === "Enter" && handleSubmit();
 
   return (
     <>
@@ -153,7 +159,14 @@ export default function Auth() {
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
             <div>
               <label style={{ fontSize:9, color:"#475569", letterSpacing:"0.15em", fontFamily:"'Space Mono',monospace", display:"block", marginBottom:6 }}>EMAIL ADDRESS</label>
-              <input type="email" value={email} placeholder="you@example.com" onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key==="Enter" && handleSubmit()} style={inputStyle} />
+              <input
+                type="email"
+                value={email}
+                placeholder="you@example.com"
+                onChange={e => setEmail(e.target.value)}
+                onKeyDown={handleEnter}
+                style={inputStyle}
+              />
             </div>
             <div>
               <label style={{ fontSize:9, color:"#475569", letterSpacing:"0.15em", fontFamily:"'Space Mono',monospace", display:"block", marginBottom:6 }}>PASSWORD</label>
@@ -162,6 +175,7 @@ export default function Auth() {
                 onChange={e => setPassword(e.target.value)}
                 show={showPassword}
                 onToggle={() => setShowPassword(p => !p)}
+                onKeyDown={handleEnter}
               />
             </div>
             {mode === "signup" && (
@@ -172,6 +186,7 @@ export default function Auth() {
                   onChange={e => setConfirm(e.target.value)}
                   show={showConfirm}
                   onToggle={() => setShowConfirm(p => !p)}
+                  onKeyDown={handleEnter}
                 />
               </div>
             )}

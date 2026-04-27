@@ -64,11 +64,11 @@ export default function Header({ activeView, onViewChange, userRole }) {
       {/* Nav */}
       <nav style={{ display: "flex", gap: 4 }}>
         {[
-          { id: "map", icon: "🗺️", label: "MAP" },
+          { id: "map",       icon: "🗺️", label: "MAP" },
           { id: "analytics", icon: "📊", label: "ANALYTICS" },
-          ...(userRole === "admin" ? [{ id: "input", icon: "📥", label: "INPUT DATA" }] : []),
-          { id: "eval", icon: "📊", label: "EVALUATION" },
-          { id: "about", icon: "ℹ️", label: "ABOUT" },
+          { id: "input",     icon: "📥", label: "INPUT DATA" },
+          { id: "eval",      icon: "📈", label: "EVALUATION" },
+          { id: "about",     icon: "ℹ️",  label: "ABOUT" },
         ].map((v) => (
           <button
             key={v.id}
