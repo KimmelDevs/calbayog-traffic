@@ -1,5 +1,6 @@
 // components/DataInputView.jsx
 // Manual traffic data entry → save to Supabase → run LSTM prediction
+// ⚠️  ADMIN ONLY — access is gated by the `user_roles` table in Supabase.
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { useRouter } from "next/router";
@@ -19,14 +20,13 @@ const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Satur
 const JS_DAY = { Sunday:0, Monday:1, Tuesday:2, Wednesday:3, Thursday:4, Friday:5, Saturday:6 };
 
 // 96 slots: every 15 minutes from 00:00 to 23:45
-// value = decimal hour (8.25 = 8:15 AM), label = human-readable
 const SLOTS = Array.from({ length: 96 }, (_, i) => {
   const totalMins = i * 15;
   const hour24    = Math.floor(totalMins / 60);
   const mins      = totalMins % 60;
   const ampm      = hour24 < 12 ? "AM" : "PM";
   const h12       = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24;
-  const value     = hour24 + mins / 60;                        // e.g. 8.25
+  const value     = hour24 + mins / 60;
   const label     = `${String(h12).padStart(2,"0")}:${String(mins).padStart(2,"0")} ${ampm}`;
   return { value, label };
 });
@@ -34,7 +34,7 @@ const SLOTS = Array.from({ length: 96 }, (_, i) => {
 const EMPTY_FORM = {
   road: ROADS[0],
   day: "Monday",
-  hour: 8,           // 8.0 = 08:00 AM
+  hour: 8,
   vehicle_count: "",
 };
 
@@ -88,30 +88,100 @@ const S = {
   }),
 };
 
+// ── Access-denied screen ────────────────────────────────────────────────────
+function AccessDenied() {
+  const router = useRouter();
+  return (
+    <div style={{
+      flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
+      background: "#070d1a", flexDirection: "column", gap: 18,
+      fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+    }}>
+      <div style={{
+        background: "#0f172a", border: "1px solid #ef444440",
+        borderRadius: 12, padding: "36px 48px", textAlign: "center", maxWidth: 420,
+      }}>
+        <div style={{ fontSize: 36, marginBottom: 16 }}>🔒</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#ef4444", letterSpacing: "0.12em", marginBottom: 10 }}>
+          ADMIN ACCESS REQUIRED
+        </div>
+        <div style={{ fontSize: 11, color: "#475569", lineHeight: 1.8, marginBottom: 24 }}>
+          The Data Input module is restricted to administrators only.
+          Contact your system administrator if you need access.
+        </div>
+        <button
+          onClick={() => router.replace("/dashboard")}
+          style={{
+            padding: "10px 24px", borderRadius: 8, border: "none",
+            background: "linear-gradient(90deg,#3b82f6,#06b6d4)",
+            color: "#fff", fontSize: 11, fontWeight: 700,
+            letterSpacing: "0.12em", cursor: "pointer",
+            fontFamily: "inherit",
+          }}
+        >
+          ← BACK TO DASHBOARD
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Component ──────────────────────────────────────────────────────────────
 export default function DataInputView() {
   const router = useRouter();
-  const [user,       setUser]       = useState(null);
-  const [checking,   setChecking]   = useState(true);
-  const [form,       setForm]       = useState(EMPTY_FORM);
-  const [status,     setStatus]     = useState("idle"); // idle | saving | predicting | done | error
-  const [errorMsg,   setErrorMsg]   = useState("");
-  const [prediction, setPrediction] = useState(null);
-  const [logs,       setLogs]       = useState([]);      // recent entries from Supabase
-  const [loadingLogs,setLoadingLogs]= useState(false);
+  const [user,        setUser]        = useState(null);
+  const [isAdmin,     setIsAdmin]     = useState(false);
+  const [checking,    setChecking]    = useState(true);  // still verifying auth + role
+  const [form,        setForm]        = useState(EMPTY_FORM);
+  const [status,      setStatus]      = useState("idle"); // idle | saving | predicting | done | error
+  const [errorMsg,    setErrorMsg]    = useState("");
+  const [prediction,  setPrediction]  = useState(null);
+  const [logs,        setLogs]        = useState([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
 
-  // ── Auth check ─────────────────────────────────────────────────────────
+  // ── Auth + admin-role check ─────────────────────────────────────────────
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) { setUser(data.session.user); setChecking(false); }
-      else              { setChecking(false); router.replace("/auth"); }
-    });
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+
+      if (!data.session) {
+        // Not logged in at all → send to auth
+        router.replace("/auth");
+        return;
+      }
+
+      const currentUser = data.session.user;
+      setUser(currentUser);
+
+      // ── Option A: role stored in Supabase user_metadata (set via Admin API)
+      //    e.g.  supabase.auth.admin.updateUserById(id, { user_metadata: { role: "admin" } })
+      const metaRole = currentUser.user_metadata?.role;
+      if (metaRole === "admin") {
+        setIsAdmin(true);
+        setChecking(false);
+        return;
+      }
+
+      // ── Option B: role stored in a `user_roles` table
+      //    Schema:  user_roles(user_id uuid references auth.users, role text)
+      const { data: roleRow, error: roleErr } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", currentUser.id)
+        .single();
+
+      if (!roleErr && roleRow?.role === "admin") {
+        setIsAdmin(true);
+      }
+
+      setChecking(false);
+    })();
   }, []);
 
-  // ── Load recent logs on mount ──────────────────────────────────────────
+  // ── Load recent logs (admin only) ──────────────────────────────────────
   useEffect(() => {
-    if (user) fetchLogs();
-  }, [user]);
+    if (user && isAdmin) fetchLogs();
+  }, [user, isAdmin]);
 
   async function fetchLogs() {
     setLoadingLogs(true);
@@ -162,7 +232,6 @@ export default function DataInputView() {
       setStatus("predicting");
       await loadModel();
 
-      // Query historical averages for this road+day+hour as context
       const { data: history } = await supabase
         .from("traffic_logs")
         .select("vehicle_count, hour")
@@ -171,7 +240,6 @@ export default function DataInputView() {
         .order("recorded_at", { ascending: false })
         .limit(20);
 
-      // Use real vehicle count for this entry; fall back to history avg or input
       const pred = await predictCongestion(
         form.road,
         form.hour,
@@ -182,7 +250,6 @@ export default function DataInputView() {
       setPrediction({ ...pred, road: form.road, day: form.day, hour: form.hour, count });
       setStatus("done");
 
-      // Refresh log table
       fetchLogs();
 
     } catch (err) {
@@ -192,21 +259,31 @@ export default function DataInputView() {
     }
   }
 
-  // ── Loading / unauthed states ──────────────────────────────────────────
+  // ── Loading state ──────────────────────────────────────────────────────
   if (checking) return (
     <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center",
       background:"#070d1a", color:"#334155", fontSize:11, letterSpacing:"0.12em", fontFamily:"monospace" }}>
       VERIFYING ACCESS...
     </div>
   );
-  if (!user) return null;
+
+  // ── Not an admin → show access-denied screen ───────────────────────────
+  if (!isAdmin) return <AccessDenied />;
 
   const busy = status === "saving" || status === "predicting";
   const canSubmit = form.vehicle_count !== "" && !busy;
 
-  // ── Render ─────────────────────────────────────────────────────────────
+  // ── Render (admin view) ────────────────────────────────────────────────
   return (
     <div style={S.root}>
+
+      {/* ── Admin badge ── */}
+      <div style={{ width: "100%", display: "flex", alignItems: "center", gap: 8,
+        marginBottom: -8, fontSize: 9, color: "#22c55e", letterSpacing: "0.15em" }}>
+        <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e",
+          boxShadow: "0 0 6px #22c55e", display: "inline-block" }} />
+        ADMIN MODE — DATA INPUT ENABLED
+      </div>
 
       {/* ── Left: Entry form ── */}
       <div style={{ flex: "0 0 340px", display: "flex", flexDirection: "column", gap: 16 }}>
@@ -321,7 +398,6 @@ export default function DataInputView() {
               PREDICTION RESULT
             </div>
 
-            {/* Big label */}
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
               <div style={S.dot(CONGESTION_COLORS[prediction.label])} />
               <span style={{ fontSize: 22, fontWeight: 800, color: CONGESTION_COLORS[prediction.label], letterSpacing: "0.08em" }}>
@@ -332,12 +408,10 @@ export default function DataInputView() {
               </span>
             </div>
 
-            {/* Context */}
             <div style={{ fontSize: 10, color: "#64748b", marginBottom: 14, lineHeight: 1.8 }}>
               {prediction.road} · {prediction.day} · {SLOTS.find(s => s.value === prediction.hour)?.label} · {prediction.count} vehicles
             </div>
 
-            {/* Probability bars */}
             {Object.entries(prediction.probabilities).map(([cls, pct]) => (
               <div key={cls} style={{ marginBottom: 8 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, marginBottom: 4 }}>
@@ -363,10 +437,11 @@ export default function DataInputView() {
         {/* SQL hint */}
         <div style={{ ...S.card, padding: 16 }}>
           <div style={{ fontSize: 9, color: "#334155", letterSpacing: "0.12em", marginBottom: 8 }}>
-            SUPABASE TABLE REQUIRED
+            SUPABASE TABLES REQUIRED
           </div>
           <div style={{ fontSize: 9, color: "#1e3a5f", lineHeight: 2, fontFamily: "monospace", whiteSpace: "pre" }}>
-{`create table traffic_logs (
+{`-- Traffic data
+create table traffic_logs (
   id            bigint generated always
                 as identity primary key,
   location      text    not null,
@@ -375,7 +450,18 @@ export default function DataInputView() {
   hour          int     not null,
   vehicle_count int     not null,
   recorded_at   timestamptz default now()
-);`}
+);
+
+-- Admin roles (Option B)
+create table user_roles (
+  user_id uuid references auth.users
+         on delete cascade,
+  role    text not null,
+  primary key (user_id)
+);
+-- Grant admin:
+-- insert into user_roles (user_id, role)
+-- values ('<user-uuid>', 'admin');`}
           </div>
         </div>
 
@@ -405,7 +491,6 @@ export default function DataInputView() {
         ) : (
           <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
 
-            {/* Table header */}
             <div style={{
               display: "grid",
               gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr",
@@ -419,7 +504,6 @@ export default function DataInputView() {
               <span>LOGGED</span>
             </div>
 
-            {/* Rows */}
             <div style={{ maxHeight: 560, overflowY: "auto" }}>
               {logs.map((row, i) => {
                 const hourLabel = SLOTS.find(s => s.value === row.hour)?.label
@@ -451,7 +535,6 @@ export default function DataInputView() {
           </div>
         )}
 
-        {/* Stats by road */}
         {logs.length > 0 && (
           <div style={{ ...S.card, marginTop: 16 }}>
             <div style={{ fontSize: 10, color: "#475569", letterSpacing: "0.12em", marginBottom: 14 }}>
