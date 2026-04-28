@@ -113,7 +113,15 @@ export default function Sidebar({
         </div>
 
         <div style={{ marginBottom: 8 }}>
-          <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.1em", marginBottom: 4 }}>PREDICT DAY</div>
+          <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.1em", marginBottom: 4, display: "flex", justifyContent: "space-between" }}>
+            <span>PREDICT DAY</span>
+            {selectedDate && (
+              <span style={{ color: "#38bdf8" }}>
+                {new Date(...selectedDate.split("-").map((v,i) => i===1 ? Number(v)-1 : Number(v)))
+                  .toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}
+              </span>
+            )}
+          </div>
           <select value={selectedDay} onChange={(e) => onDayChange(Number(e.target.value))}
             style={{ width: "100%", background: "#1e293b", border: "1px solid #1e3a5f", borderRadius: 5, padding: "6px 8px", fontSize: 11, color: "#94a3b8", fontFamily: "inherit", cursor: "pointer" }}>
             {DAYS_LABEL.map((d, i) => <option key={i} value={i}>{d}</option>)}
@@ -158,6 +166,11 @@ export default function Sidebar({
                   <span style={{ fontSize: 9, color: "#94a3b8", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={name}>{shortName}</span>
                   <span style={{ fontSize: 8, color, fontWeight: 700, letterSpacing: "0.06em", flexShrink: 0 }}>{result.label}</span>
                   <span style={{ fontSize: 8, color: "#475569", flexShrink: 0 }}>{result.confidence}%</span>
+                  {result.anomalyStepCount > 0 && (
+                    <span style={{ fontSize: 7, color: "#f59e0b", background: "rgba(245,158,11,0.10)", padding: "1px 4px", borderRadius: 3, flexShrink: 0, border: "1px solid #f59e0b40" }}>
+                      ⚠️ {result.anomalyStepCount}
+                    </span>
+                  )}
                   <span style={{ fontSize: 7, color: result.simulated ? "#475569" : "#38bdf8", background: result.simulated ? "#1e293b" : "#38bdf810", padding: "1px 4px", borderRadius: 3, flexShrink: 0, letterSpacing: "0.04em", border: result.simulated ? "1px solid #334155" : "1px solid #38bdf830" }}>{result.simulated ? "SIM" : "LSTM"}</span>
                 </div>
               );

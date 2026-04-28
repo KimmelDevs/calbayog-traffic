@@ -184,14 +184,22 @@ export default function Home() {
 
   const handleDayChange = (d) => {
     setSelectedDay(d);
-    // Find the nearest upcoming date (within next 7 days) that matches this weekday
-    const base = selectedDate ? (() => { const [y,m,day] = selectedDate.split("-").map(Number); return new Date(y, m-1, day); })() : new Date();
+    // Parse the currently selected date (or today as fallback)
+    let base;
+    if (selectedDate) {
+      const [y, m, day] = selectedDate.split("-").map(Number);
+      base = new Date(y, m - 1, day);
+    } else {
+      base = new Date();
+    }
+    // Find nearest date (today or future) matching the target weekday
     const diff = (d - base.getDay() + 7) % 7;
     const target = new Date(base);
-    target.setDate(base.getDate() + (diff === 0 ? 0 : diff));
-    const newDate = target.getFullYear() + "-" +
-      String(target.getMonth()+1).padStart(2,"0") + "-" +
-      String(target.getDate()).padStart(2,"0");
+    target.setDate(base.getDate() + diff);
+    const newDate =
+      target.getFullYear() + "-" +
+      String(target.getMonth() + 1).padStart(2, "0") + "-" +
+      String(target.getDate()).padStart(2, "0");
     setSelectedDate(newDate);
     setIsPlaying(false);
     setSimResults({});
@@ -210,13 +218,19 @@ export default function Home() {
   };
   const isLoaded = segments.length > 0;
 
+  const handleLogout = async () => {
+    const { supabase } = await import("../lib/supabase");
+    await supabase.auth.signOut();
+    window.location.href = "/auth";
+  };
+
   return (
     <>
       <Head>
         <title>Calbayog City — Traffic Flow Prediction System</title>
       </Head>
       <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
-        <Header activeView={activeView} onViewChange={setActiveView} isAdmin={isAdmin} />
+        <Header activeView={activeView} onViewChange={setActiveView} isAdmin={isAdmin} onLogout={handleLogout} />
         <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
 
           {isLoaded ? (

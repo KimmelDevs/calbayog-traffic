@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { DAYS_OF_WEEK } from "../lib/trafficData";
 
-export default function Header({ activeView, onViewChange, userRole, isAdmin }) {
+export default function Header({ activeView, onViewChange, userRole, isAdmin, onLogout }) {
   const [time, setTime] = useState(null);
 
   useEffect(() => {
@@ -96,18 +96,48 @@ export default function Header({ activeView, onViewChange, userRole, isAdmin }) 
         ))}
       </nav>
 
-      {/* Clock */}
-      <div style={{ textAlign: "right" }}>
-        {time && (
-          <>
-            <div style={{ fontSize: 16, fontWeight: 700, color: "#38bdf8", letterSpacing: "0.05em" }}>
-              {time.toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-            </div>
-            <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.1em" }}>
-              {DAYS_OF_WEEK[time.getDay()].toUpperCase()},{" "}
-              {time.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" }).toUpperCase()}
-            </div>
-          </>
+      {/* Right: Clock + Logout */}
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        {/* Clock */}
+        <div style={{ textAlign: "right" }}>
+          {time && (
+            <>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "#38bdf8", letterSpacing: "0.05em" }}>
+                {time.toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+              </div>
+              <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.1em" }}>
+                {DAYS_OF_WEEK[time.getDay()].toUpperCase()},{" "}
+                {time.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" }).toUpperCase()}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Logout */}
+        {onLogout && (
+          <button
+            onClick={onLogout}
+            title="Sign out"
+            style={{
+              padding: "6px 14px",
+              borderRadius: 6,
+              border: "1px solid #1e3a5f",
+              background: "transparent",
+              color: "#475569",
+              fontSize: 10,
+              letterSpacing: "0.1em",
+              cursor: "pointer",
+              fontFamily: "inherit",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = "#ef4444"; e.currentTarget.style.color = "#ef4444"; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = "#1e3a5f"; e.currentTarget.style.color = "#475569"; }}
+          >
+            ⎋ LOGOUT
+          </button>
         )}
       </div>
     </header>
