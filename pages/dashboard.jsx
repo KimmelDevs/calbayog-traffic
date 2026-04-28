@@ -32,6 +32,23 @@ export default function Home() {
   const [selectedDay,  setSelectedDay]  = useState(new Date().getDay());
   const [simResults,   setSimResults]   = useState({});
   const [simLoading,   setSimLoading]   = useState(false);
+  const [isAdmin,      setIsAdmin]      = useState(false);
+
+  // ── Check admin role on mount ─────────────────────────────────────────────
+  useEffect(() => {
+    (async () => {
+      const { supabase } = await import("../lib/supabase");
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) return;
+      const u = data.session.user;
+      // Option A: user_metadata role
+      if (u.user_metadata?.role === "admin") { setIsAdmin(true); return; }
+      // Option B: user_roles table
+      const { data: row } = await supabase
+        .from("user_roles").select("role").eq("user_id", u.id).single();
+      if (row?.role === "admin") setIsAdmin(true);
+    })();
+  }, []);
 
   useEffect(() => {
     // start at 00:00
@@ -161,7 +178,7 @@ export default function Home() {
         <title>Calbayog City — Traffic Flow Prediction System</title>
       </Head>
       <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
-        <Header activeView={activeView} onViewChange={setActiveView} />
+        <Header activeView={activeView} onViewChange={setActiveView} isAdmin={isAdmin} />
         <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
 
           {isLoaded ? (
@@ -207,7 +224,15 @@ export default function Home() {
                 )}
               </>
             )}
-            {activeView === "analytics" && isLoaded && <AnalyticsView segments={segments} selectedHour={selectedHour} />}
+            {activeView === "analytics" && isLoaded && (
+              <AnalyticsView
+                segments={segments}
+                selectedHour={selectedHour}
+                selectedDay={selectedDay}
+                simResults={simResults}
+                isPlaying={isPlaying}
+              />
+            )}
             {activeView === "analytics" && !isLoaded && (
               <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "#334155", fontSize: 11, letterSpacing: "0.12em" }}>LOADING DATA...</div>
             )}

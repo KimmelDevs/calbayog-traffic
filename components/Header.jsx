@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { DAYS_OF_WEEK } from "../lib/trafficData";
 
-export default function Header({ activeView, onViewChange, userRole }) {
+export default function Header({ activeView, onViewChange, userRole, isAdmin }) {
   const [time, setTime] = useState(null);
 
   useEffect(() => {
@@ -66,10 +66,10 @@ export default function Header({ activeView, onViewChange, userRole }) {
         {[
           { id: "map",       icon: "🗺️", label: "MAP" },
           { id: "analytics", icon: "📊", label: "ANALYTICS" },
-          { id: "input",     icon: "📥", label: "INPUT DATA" },
+          { id: "input",     icon: "📥", label: "INPUT DATA", adminOnly: true },
           { id: "eval",      icon: "📈", label: "EVALUATION" },
           { id: "about",     icon: "ℹ️",  label: "ABOUT" },
-        ].map((v) => (
+        ].filter((v) => !v.adminOnly || isAdmin).map((v) => (
           <button
             key={v.id}
             onClick={() => onViewChange(v.id)}
