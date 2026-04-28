@@ -14,6 +14,8 @@ export default function Sidebar({
   onTogglePlay,
   selectedDay,
   onDayChange,
+  selectedDate,
+  onDateChange,
   onSimulate,
   simResults,
   simLoading,
@@ -94,6 +96,21 @@ export default function Sidebar({
         })()}
 
         <div style={{ borderTop: "1px solid #1e3a5f", marginBottom: 12 }} />
+
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.1em", marginBottom: 4 }}>PREDICT DATE</div>
+          <input
+            type="date"
+            value={selectedDate ?? ""}
+            onChange={(e) => onDateChange(e.target.value)}
+            style={{
+              width: "100%", background: "#1e293b", border: "1px solid #1e3a5f",
+              borderRadius: 5, padding: "6px 8px", fontSize: 11, color: "#94a3b8",
+              fontFamily: "inherit", cursor: "pointer",
+              colorScheme: "dark", boxSizing: "border-box",
+            }}
+          />
+        </div>
 
         <div style={{ marginBottom: 8 }}>
           <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.1em", marginBottom: 4 }}>PREDICT DAY</div>

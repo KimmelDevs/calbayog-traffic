@@ -30,6 +30,8 @@ export default function Home() {
   const osmRoadsForSim = useRef([]); // filled by TrafficMap callback
   const [segments, setSegments] = useState([]);
   const [selectedDay,  setSelectedDay]  = useState(new Date().getDay());
+  const todayStr = new Date().toISOString().split("T")[0];
+  const [selectedDate, setSelectedDate] = useState(todayStr);
   const [simResults,   setSimResults]   = useState({});
   const [simLoading,   setSimLoading]   = useState(false);
   const [isAdmin,      setIsAdmin]      = useState(false);
@@ -105,7 +107,22 @@ export default function Home() {
     // Real LSTM on 4 trained roads
     for (const knownName of LSTM_KNOWN_ROADS) {
       try {
-        const r = await predictCongestion(knownName, hour, day, null);
+        // Check if the most recent log for this road+hour+day was flagged as anomaly
+        const { supabase } = await import("../lib/supabase");
+        const { data: anomalyRows } = await supabase
+          .from("traffic_logs")
+          .select("is_anomaly, vehicle_count")
+          .eq("location", knownName)
+          .eq("day_of_week", day)
+          .gte("hour", hour - 0.125)
+          .lte("hour", hour + 0.124)
+          .order("recorded_at", { ascending: false })
+          .limit(1);
+        const latestLog  = anomalyRows?.[0];
+        const anomalyFlag = latestLog?.is_anomaly ? 1 : 0;
+        const latestCount = latestLog?.vehicle_count ?? null;
+
+        const r = await predictCongestion(knownName, hour, day, latestCount, anomalyFlag);
         results[knownName] = { ...r, simulated: false };
       } catch(e) {
         console.warn("LSTM failed for", knownName, e);
@@ -167,8 +184,29 @@ export default function Home() {
 
   const handleDayChange = (d) => {
     setSelectedDay(d);
+    // Find the nearest upcoming date (within next 7 days) that matches this weekday
+    const base = selectedDate ? (() => { const [y,m,day] = selectedDate.split("-").map(Number); return new Date(y, m-1, day); })() : new Date();
+    const diff = (d - base.getDay() + 7) % 7;
+    const target = new Date(base);
+    target.setDate(base.getDate() + (diff === 0 ? 0 : diff));
+    const newDate = target.getFullYear() + "-" +
+      String(target.getMonth()+1).padStart(2,"0") + "-" +
+      String(target.getDate()).padStart(2,"0");
+    setSelectedDate(newDate);
     setIsPlaying(false);
-    setSimResults({});  // changing day invalidates predictions
+    setSimResults({});
+  };
+
+  const handleDateChange = (dateStr) => {
+    setSelectedDate(dateStr);
+    if (dateStr) {
+      // parse as local date to avoid UTC offset shifting the day
+      const [y, m, day] = dateStr.split("-").map(Number);
+      const d = new Date(y, m - 1, day).getDay();
+      setSelectedDay(d);
+    }
+    setIsPlaying(false);
+    setSimResults({});
   };
   const isLoaded = segments.length > 0;
 
@@ -192,6 +230,8 @@ export default function Home() {
               onTogglePlay={() => setIsPlaying((p) => !p)}
               selectedDay={selectedDay}
               onDayChange={handleDayChange}
+              selectedDate={selectedDate}
+              onDateChange={handleDateChange}
               onSimulate={handleSimulate}
               simResults={simResults}
               simLoading={simLoading}
