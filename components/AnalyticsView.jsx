@@ -18,7 +18,7 @@ export default function AnalyticsView({ segments, selectedHour, selectedDay, sim
     return segments.map((s) => {
       const sim = simResults?.[s.name];
       if (sim) {
-        const flow    = LABEL_TO_FLOW[sim.label] ?? s.series[selectedHour]?.flow ?? s.baseFlow;
+        const flow    = sim.vehicleCount ?? LABEL_TO_FLOW[sim.label] ?? s.series[selectedHour]?.flow ?? s.baseFlow;
         const traffic = getTrafficLevelFromLabel(sim.label);
         return { ...s, flow, traffic, sim };
       }
@@ -214,7 +214,7 @@ export default function AnalyticsView({ segments, selectedHour, selectedDay, sim
                     const isCurrentHour = h === selectedHour || (selectedHour % 2 !== 0 && h === selectedHour - 1);
                     const sim = isCurrentHour ? simResults?.[seg.name] : null;
                     const f   = sim
-                      ? (LABEL_TO_FLOW[sim.label] ?? seg.series[h]?.flow ?? 0)
+                      ? (sim.vehicleCount ?? LABEL_TO_FLOW[sim.label] ?? seg.series[h]?.flow ?? 0)
                       : (seg.series[h]?.flow ?? 0);
                     const t = getTrafficLevel(f);
                     return (

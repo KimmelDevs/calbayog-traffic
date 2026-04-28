@@ -31,11 +31,31 @@ const SLOTS = Array.from({ length: 96 }, (_, i) => {
   return { value, label };
 });
 
+// Returns today as "YYYY-MM-DD" in local time
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + "-" +
+    String(d.getMonth()+1).padStart(2,"0") + "-" +
+    String(d.getDate()).padStart(2,"0");
+}
+
+// Derive day-of-week from a "YYYY-MM-DD" string (avoids UTC shift)
+function parseDateField(dateStr) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  return {
+    dayIndex: dt.getDay(),
+    dayName:  DAYS[dt.getDay()],
+  };
+}
+
 const EMPTY_FORM = {
-  road: ROADS[0],
-  day: "Monday",
-  hour: 8,
+  road:          ROADS[0],
+  date:          todayStr(),
+  hour:          8,
   vehicle_count: "",
+  is_anomaly:    false,
+  event_note:    "",
 };
 
 // ── Styles ─────────────────────────────────────────────────────────────────
@@ -216,14 +236,24 @@ export default function DataInputView() {
 
     try {
       // 1. Save to Supabase
+      const { dayIndex, dayName } = parseDateField(form.date);
+      // Build a timestamptz from the chosen date + time slot
+      const [y, m, d] = form.date.split("-").map(Number);
+      const slotHour  = Math.floor(form.hour);
+      const slotMin   = Math.round((form.hour - slotHour) * 60);
+      const recordedAt = new Date(y, m - 1, d, slotHour, slotMin).toISOString();
+
       const { error: insertErr } = await supabase
         .from("traffic_logs")
         .insert({
           location:      form.road,
-          day_of_week:   JS_DAY[form.day],
-          day_name:      form.day,
+          day_of_week:   dayIndex,
+          day_name:      dayName,
           hour:          form.hour,
           vehicle_count: count,
+          recorded_at:   recordedAt,
+          is_anomaly:    form.is_anomaly ? true : false,
+          event_note:    form.is_anomaly ? form.event_note.trim() : null,
         });
 
       if (insertErr) throw new Error(insertErr.message);
@@ -232,22 +262,25 @@ export default function DataInputView() {
       setStatus("predicting");
       await loadModel();
 
+      const { dayIndex: histDayIdx } = parseDateField(form.date);
       const { data: history } = await supabase
         .from("traffic_logs")
         .select("vehicle_count, hour")
         .eq("location", form.road)
-        .eq("day_of_week", JS_DAY[form.day])
+        .eq("day_of_week", histDayIdx)
         .order("recorded_at", { ascending: false })
         .limit(20);
 
+      const { dayIndex: predDayIdx, dayName: predDayName } = parseDateField(form.date);
       const pred = await predictCongestion(
         form.road,
         form.hour,
-        JS_DAY[form.day],
-        count
+        predDayIdx,
+        count,
+        form.is_anomaly ? 1 : 0
       );
 
-      setPrediction({ ...pred, road: form.road, day: form.day, hour: form.hour, count });
+      setPrediction({ ...pred, road: form.road, day: predDayName, date: form.date, hour: form.hour, count, is_anomaly: form.is_anomaly, event_note: form.event_note });
       setStatus("done");
 
       fetchLogs();
@@ -311,28 +344,27 @@ export default function DataInputView() {
             </div>
           </div>
 
-          {/* Day */}
+          {/* Date picker */}
           <div style={{ marginBottom: 14 }}>
-            <label style={S.label}>Day of Week</label>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 5 }}>
-              {DAYS.map(d => (
-                <button
-                  key={d}
-                  onClick={() => setField("day", d)}
-                  style={{
-                    padding: "8px 2px", borderRadius: 6, border: "none",
-                    background: form.day === d ? "rgba(59,130,246,0.25)" : "#0a1628",
-                    color: form.day === d ? "#38bdf8" : "#475569",
-                    fontSize: 9, fontWeight: 700, cursor: "pointer",
-                    letterSpacing: "0.05em", fontFamily: "inherit",
-                    outline: form.day === d ? "1px solid #3b82f6" : "1px solid transparent",
-                    transition: "all 0.15s",
-                  }}
-                >
-                  {d.slice(0, 3).toUpperCase()}
-                </button>
-              ))}
-            </div>
+            <label style={S.label}>Date</label>
+            <input
+              type="date"
+              value={form.date}
+              max={todayStr()}
+              onChange={e => setField("date", e.target.value)}
+              style={{
+                ...S.input,
+                colorScheme: "dark",
+              }}
+            />
+            {form.date && (
+              <div style={{ fontSize: 9, color: "#475569", marginTop: 5 }}>
+                {parseDateField(form.date).dayName}
+                {" · "}
+                {new Date(...form.date.split("-").map((v,i)=>i===1?Number(v)-1:Number(v)))
+                  .toLocaleDateString("en-PH", { month:"long", day:"numeric", year:"numeric" })}
+              </div>
+            )}
           </div>
 
           {/* Time Slot */}
@@ -351,6 +383,62 @@ export default function DataInputView() {
               <span style={{ position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", color:"#475569", pointerEvents:"none", fontSize:10 }}>▾</span>
             </div>
           </div>
+
+          {/* Anomaly toggle */}
+          <div style={{ marginBottom: 14 }}>
+            <label style={S.label}>Event / Anomaly</label>
+            <button
+              type="button"
+              onClick={() => setField("is_anomaly", !form.is_anomaly)}
+              style={{
+                width: "100%", padding: "10px 12px", borderRadius: 7,
+                border: `1px solid ${form.is_anomaly ? "#f59e0b" : "#1e3a5f"}`,
+                background: form.is_anomaly ? "rgba(245,158,11,0.10)" : "#0a1628",
+                color: form.is_anomaly ? "#f59e0b" : "#475569",
+                fontSize: 11, fontWeight: 700, cursor: "pointer",
+                fontFamily: "inherit", letterSpacing: "0.1em",
+                display: "flex", alignItems: "center", gap: 10,
+                transition: "all 0.2s",
+              }}
+            >
+              <span style={{
+                width: 16, height: 16, borderRadius: 4,
+                border: `2px solid ${form.is_anomaly ? "#f59e0b" : "#1e3a5f"}`,
+                background: form.is_anomaly ? "#f59e0b" : "transparent",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 10, color: "#0a1628", transition: "all 0.2s",
+                flexShrink: 0,
+              }}>
+                {form.is_anomaly ? "✓" : ""}
+              </span>
+              {form.is_anomaly ? "⚠️ ANOMALY FLAGGED" : "FLAG AS ANOMALY"}
+            </button>
+            <div style={{ fontSize: 9, color: "#334155", marginTop: 5 }}>
+              Flag if an event (fiesta, election, road work, accident) is affecting traffic on this date.
+            </div>
+          </div>
+
+          {/* Event note — only visible when anomaly is flagged */}
+          {form.is_anomaly && (
+            <div style={{ marginBottom: 14 }}>
+              <label style={S.label}>Event Description</label>
+              <input
+                type="text"
+                placeholder="e.g. Calbayog Fiesta, road closure, heavy rain..."
+                value={form.event_note}
+                maxLength={120}
+                onChange={e => setField("event_note", e.target.value)}
+                style={{
+                  ...S.input,
+                  borderColor: "#f59e0b",
+                  outline: "none",
+                }}
+              />
+              <div style={{ fontSize: 9, color: "#475569", marginTop: 5 }}>
+                This is saved alongside the entry and passed to the LSTM as an anomaly signal.
+              </div>
+            </div>
+          )}
 
           {/* Vehicle count */}
           <div style={{ marginBottom: 20 }}>
@@ -409,7 +497,13 @@ export default function DataInputView() {
             </div>
 
             <div style={{ fontSize: 10, color: "#64748b", marginBottom: 14, lineHeight: 1.8 }}>
-              {prediction.road} · {prediction.day} · {SLOTS.find(s => s.value === prediction.hour)?.label} · {prediction.count} vehicles
+              {prediction.road} · {prediction.date} · {prediction.day} · {SLOTS.find(s => s.value === prediction.hour)?.label} · {prediction.count} vehicles
+              {prediction.is_anomaly && (
+                <span style={{ marginLeft: 8, padding: "1px 6px", borderRadius: 4, fontSize: 9,
+                  background: "rgba(245,158,11,0.12)", border: "1px solid #f59e0b40", color: "#f59e0b" }}>
+                  ⚠️ ANOMALY{prediction.event_note ? ` — ${prediction.event_note}` : ""}
+                </span>
+              )}
             </div>
 
             {Object.entries(prediction.probabilities).map(([cls, pct]) => (
@@ -493,7 +587,7 @@ create table user_roles (
 
             <div style={{
               display: "grid",
-              gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr",
+              gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 2fr 1fr",
               padding: "10px 16px", borderBottom: "1px solid #1e3a5f",
               fontSize: 8, color: "#334155", letterSpacing: "0.14em",
             }}>
@@ -501,7 +595,7 @@ create table user_roles (
               <span>DAY</span>
               <span>HOUR</span>
               <span>VEHICLES</span>
-              <span>LOGGED</span>
+              <span>DATE</span><span>EVENT</span><span>LOGGED</span>
             </div>
 
             <div style={{ maxHeight: 560, overflowY: "auto" }}>
@@ -513,7 +607,7 @@ create table user_roles (
                 const timeAgo   = formatTimeAgo(recorded);
                 return (
                   <div key={row.id} style={{
-                    display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr",
+                    display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr 2fr 1fr",
                     padding: "9px 16px", borderBottom: "1px solid #0a1628",
                     background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.01)",
                     alignItems: "center",
@@ -522,6 +616,14 @@ create table user_roles (
                     <span style={{ fontSize: 10, color: "#475569" }}>{(row.day_name ?? DAYS[row.day_of_week])?.slice(0,3)}</span>
                     <span style={{ fontSize: 10, color: "#475569" }}>{hourLabel}</span>
                     <span style={{ fontSize: 11, color: "#38bdf8", fontWeight: 700 }}>{row.vehicle_count}</span>
+                    <span style={{ fontSize: 9, color: "#475569" }}>
+                      {new Date(row.recorded_at).toLocaleDateString("en-PH",{month:"short",day:"numeric",year:"numeric"})}
+                    </span>
+                    <span style={{ fontSize: 9, color: row.is_anomaly ? "#f59e0b" : "#1e3a5f",
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                      title={row.event_note || ""}>
+                      {row.is_anomaly ? (row.event_note || "⚠️ anomaly") : "—"}
+                    </span>
                     <span style={{ fontSize: 9, color: "#334155" }}>{timeAgo}</span>
                   </div>
                 );
